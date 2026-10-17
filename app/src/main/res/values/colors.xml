@@ -1,0 +1,4 @@
+<resources>
+    <!-- Gleiches Grün wie die Tafel, damit beim Start nichts aufblitzt. -->
+    <color name="tafel_gruen">#5E8C6A</color>
+</resources>

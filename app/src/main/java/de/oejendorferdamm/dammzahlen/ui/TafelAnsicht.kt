@@ -218,6 +218,8 @@ private fun beende(z: TafelZustand, zug: Zug, p: Punkt, karteBearbeiten: (Karte)
         }
         Zug.Art.MARKE -> z.setzeSeite(z.seite, merken = true, vorher = zug.vorher)
         Zug.Art.ZIEHEN -> {
+            // Die letzte Position übernehmen – beim schnellen Ziehen liegt sie oft noch vor dem Ziel
+            if (zug.bewegt || hypot(p.x - zug.start.x, p.y - zug.start.y) > 12f) bewege(z, zug, p)
             val teil = z.seite.teile.firstOrNull { it.id == zug.id } ?: return
             if (!zug.bewegt) {
                 when {

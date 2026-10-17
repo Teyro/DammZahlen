@@ -154,11 +154,11 @@ object Geometrie {
         else -> masse(t).let { m -> px >= t.x && py >= t.y && px <= t.x + m.breite && py <= t.y + m.hoehe }
     }
 
-    /** Nächster freier Platz in einem Behälter (innerhalb von 0,6 Zellen), sonst null. */
+    /** Nächster freier Platz in einem Behälter (innerhalb von 0,8 Zellen – ist der getroffene belegt, rutscht es in den Nachbarn), sonst null. */
     fun einrasten(stueck: Teil, alle: List<Teil>): Punkt? {
         val belegt = alle.filter { (it is Plaettchen || it is Figur) && it.id != stueck.id }.map { Punkt(it.x, it.y) }
         var bester: Punkt? = null
-        var abstand = ZELLE * 0.6f
+        var abstand = ZELLE * 0.8f
         val p = Punkt(stueck.x, stueck.y)
         for (b in alle) if (istBehaelter(b)) for (platz in plaetze(b)) {
             val d = platz.abstand(p)

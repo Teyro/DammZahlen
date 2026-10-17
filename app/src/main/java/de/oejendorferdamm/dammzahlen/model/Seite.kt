@@ -42,7 +42,7 @@ object SeitenJson {
             is Bus -> put("typ", "bus")
             is Rahmen -> put("typ", "rahmen").put("reihen", t.reihen).put("links", JSONArray(t.links))
             is Strahl -> put("typ", "strahl").put("bis", t.bis).apply { t.marke?.let { put("marke", it) } }
-            is Strich -> put("typ", "strich").put("start", t.start).put("ende", t.ende).put("spruenge", JSONArray().apply {
+            is Strich -> put("typ", "strich").put("start", t.start).put("ende", t.ende).put("breite", t.breite.toDouble()).put("spruenge", JSONArray().apply {
                 t.spruenge.forEach { put(JSONObject().put("von", it.von).put("bis", it.bis)) }
             })
             is Karte -> put("typ", "karte").put("text", t.text)
@@ -94,7 +94,8 @@ object SeitenJson {
             "strich" -> {
                 val sa = o.optJSONArray("spruenge") ?: JSONArray()
                 Strich(id, x, y, o.optInt("start", 0), o.optInt("ende", 20),
-                    (0 until sa.length()).mapNotNull { i -> sa.optJSONObject(i)?.let { Sprung(it.optInt("von"), it.optInt("bis")) } })
+                    (0 until sa.length()).mapNotNull { i -> sa.optJSONObject(i)?.let { Sprung(it.optInt("von"), it.optInt("bis")) } },
+                    o.optDouble("breite", Geometrie.STRICH_BREITE.toDouble()).toFloat().coerceIn(300f, 1700f))
             }
             "karte" -> Karte(id, x, y, o.optString("text").take(60))
             else -> null

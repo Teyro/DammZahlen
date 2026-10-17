@@ -82,7 +82,7 @@ data class Strahl(override val id: Long, override val x: Float, override val y: 
 }
 
 /** Rechenstrich von [start] bis [ende] mit Sprüngen (Bögen). */
-data class Strich(override val id: Long, override val x: Float, override val y: Float, val start: Int, val ende: Int, val spruenge: List<Sprung> = emptyList()) : Teil() {
+data class Strich(override val id: Long, override val x: Float, override val y: Float, val start: Int, val ende: Int, val spruenge: List<Sprung> = emptyList(), val breite: Float = Geometrie.STRICH_BREITE) : Teil() {
     override fun verschoben(x: Float, y: Float) = copy(x = x, y = y)
 }
 
@@ -105,7 +105,7 @@ object Geometrie {
         is Bus -> Masse(BUS_BREITE, BUS_HOEHE)
         is Rahmen -> Masse(10 * KUGEL + LUECKE + 2 * 110f + 40f, t.reihen * RAHMEN_REIHE + 40f)
         is Strahl -> Masse(STRAHL_BREITE + 80f, 150f)
-        is Strich -> Masse(STRICH_BREITE + 80f, 230f)
+        is Strich -> Masse(t.breite + 80f, 230f)
         is Karte -> Masse(maxOf(220f, t.text.length * 34f + 60f), 100f)
         is Plaettchen -> Masse(2 * PLAETTCHEN_R, 2 * PLAETTCHEN_R)
         is Figur -> Masse(FIGUR_B, FIGUR_H)
@@ -218,7 +218,7 @@ object Geometrie {
     /** Nächste ganze Zahl zu einer x-Position am Zahlenstrahl. */
     fun strahlZahl(s: Strahl, px: Float): Int = Math.round((px - s.x - 40f) / STRAHL_BREITE * s.bis).coerceIn(0, s.bis)
 
-    fun strichX(s: Strich, n: Int) = s.x + 40f + STRICH_BREITE * (n - s.start) / (s.ende - s.start).coerceAtLeast(1)
+    fun strichX(s: Strich, n: Int) = s.x + 40f + s.breite * (n - s.start) / (s.ende - s.start).coerceAtLeast(1)
     const val STRICH_Y = 150f
 
     // ------------------------------------------------ Rechenrahmen

@@ -29,14 +29,18 @@ object Uebergang {
         val s = if (plus) a + b else a - b
         val groesste = maxOf(a, s)
         val art = if (groesste <= 20) FeldArt.ZWANZIGER else FeldArt.HUNDERTER
-        val feld = if (art == FeldArt.ZWANZIGER) Feld(neueId(), 620f, 150f, art) else Feld(neueId(), 200f, 30f, art)
+        // Zwanzigerfeld: Feld, darunter Rechenstrich und Karte. Hunderterfeld: links das Feld,
+        // rechts Karte und kürzerer Rechenstrich – oben bleibt Platz für die Schritt-Anzeige.
+        val zwanzig = art == FeldArt.ZWANZIGER
+        val feld = if (zwanzig) Feld(neueId(), 620f, 150f, art) else Feld(neueId(), 110f, 150f, art)
         val plaetze = Geometrie.plaetze(feld)
         val start = (minOf(a, s) / 10) * 10
         val ende = maxOf(start + 10, ((groesste + 9) / 10) * 10)
-        val strichX = if (art == FeldArt.ZWANZIGER) 270f else 270f
-        val strichY = if (art == FeldArt.ZWANZIGER) 380f else 725f
-        val karteX = if (art == FeldArt.ZWANZIGER) 620f else 1000f
-        val karteY = if (art == FeldArt.ZWANZIGER) 30f else 80f
+        val strichX = if (zwanzig) 270f else 860f
+        val strichY = if (zwanzig) 350f else 460f
+        val strichBreite = if (zwanzig) Geometrie.STRICH_BREITE else 920f
+        val karteX = if (zwanzig) 700f else 960f
+        val karteY = if (zwanzig) 640f else 250f
         val zeichen = if (plus) "+" else "−"
         val strichId = neueId()
         val karteId = neueId()
@@ -49,7 +53,7 @@ object Uebergang {
         }
 
         fun stand(spruenge: List<Sprung>, text: String, steine: List<Teil>) =
-            listOf<Teil>(feld) + steine + Strich(strichId, strichX, strichY, start, ende, spruenge) + Karte(karteId, karteX, karteY, text)
+            listOf<Teil>(feld) + steine + Strich(strichId, strichX, strichY, start, ende, spruenge, strichBreite) + Karte(karteId, karteX, karteY, text)
 
         val ergebnis = ArrayList<Schritt>()
         ergebnis.add(Schritt("$a $zeichen $b – wir legen $a", stand(emptyList(), "$a $zeichen $b = ?", plaettchen(a, a))))

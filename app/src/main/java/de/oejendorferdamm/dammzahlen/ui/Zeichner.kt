@@ -70,7 +70,7 @@ class Zeichner(private val schrift: Typeface, private val schriftFett: Typeface)
         for (teil in seite.teile) when (teil) {
             is Feld -> feld(c, teil)
             is Bus -> bus(c, teil)
-            is Rahmen -> rahmen(c, teil)
+            is Rahmen -> rahmen(c, teil, zahl = !vorhang)
             is Strahl -> strahl(c, teil)
             is Strich -> strich(c, teil)
             is Karte -> karte(c, teil)
@@ -129,6 +129,7 @@ class Zeichner(private val schrift: Typeface, private val schriftFett: Typeface)
         // Karosserie (Hamburger Stadtbus-Rot), vorne rechts abgerundet
         r.set(x, y + 10f, x + b, y + h - 40f)
         schatten(c, r, 30f)
+        f.color = Color.BLACK
         f.shader = LinearGradient(0f, y, 0f, y + h, Color.rgb(0xE8, 0x2A, 0x2A), Color.rgb(0xB8, 0x0F, 0x1A), Shader.TileMode.CLAMP)
         c.drawRoundRect(r, 30f, 30f, f)
         f.shader = null
@@ -179,10 +180,11 @@ class Zeichner(private val schrift: Typeface, private val schriftFett: Typeface)
         c.drawCircle(x + 14f, y + h - 80f, 9f, f)
     }
 
-    fun rahmen(c: Canvas, rahmen: Rahmen) {
+    fun rahmen(c: Canvas, rahmen: Rahmen, zahl: Boolean = true) {
         val m = Geometrie.masse(rahmen)
         r.set(rahmen.x, rahmen.y, rahmen.x + m.breite, rahmen.y + m.hoehe)
         schatten(c, r, 12f)
+        f.color = Color.BLACK
         f.shader = LinearGradient(rahmen.x, 0f, rahmen.x + m.breite, 0f, Color.rgb(0xB0, 0x7A, 0x4C), Color.rgb(0x8A, 0x58, 0x30), Shader.TileMode.CLAMP)
         c.drawRoundRect(r, 12f, 12f, f)
         f.shader = null
@@ -198,12 +200,14 @@ class Zeichner(private val schrift: Typeface, private val schriftFett: Typeface)
             for (k in 0 until 10) {
                 val p = Geometrie.kugel(rahmen, reihe, k)
                 val farbe = if (k < 5) ROT else BLAU
+                f.color = Color.BLACK
                 f.shader = RadialGradient(p.x - 6f, p.y - 8f, Geometrie.KUGEL / 2, mische(farbe, Color.WHITE, 0.35f), farbe, Shader.TileMode.CLAMP)
                 c.drawCircle(p.x, p.y, Geometrie.KUGEL / 2 - 1f, f)
                 f.shader = null
             }
         }
-        // Zahl der links liegenden Kugeln
+        // Zahl der links liegenden Kugeln (nicht beim Blitzblick – sonst wäre die Lösung zu sehen)
+        if (!zahl) return
         val zahl = Geometrie.rahmenZahl(rahmen)
         t.typeface = schriftFett
         t.textSize = 40f
@@ -253,7 +257,7 @@ class Zeichner(private val schrift: Typeface, private val schriftFett: Typeface)
         l.color = Color.WHITE
         l.strokeWidth = 5f
         l.pathEffect = null
-        c.drawLine(s.x + 20f, y, s.x + Geometrie.STRICH_BREITE + 60f, y, l)
+        c.drawLine(s.x + 20f, y, s.x + s.breite + 60f, y, l)
         t.typeface = schrift
         t.color = Color.WHITE
         t.textSize = 34f
@@ -319,6 +323,7 @@ class Zeichner(private val schrift: Typeface, private val schriftFett: Typeface)
         val farbe = if (rot) ROT else BLAU
         f.color = Color.argb(60, 0, 0, 0)
         c.drawCircle(x + 2f, y + 3f, rad, f)
+        f.color = Color.BLACK
         f.shader = RadialGradient(x - rad * 0.3f, y - rad * 0.35f, rad * 1.2f, mische(farbe, Color.WHITE, 0.3f), farbe, Shader.TileMode.CLAMP)
         c.drawCircle(x, y, rad, f)
         f.shader = null
@@ -388,6 +393,7 @@ class Zeichner(private val schrift: Typeface, private val schriftFett: Typeface)
     private fun vorhang(c: Canvas, b: Teil) {
         val m = Geometrie.masse(b)
         r.set(b.x - 6f, b.y - 6f, b.x + m.breite + 6f, b.y + m.hoehe + 6f)
+        f.color = Color.BLACK
         f.shader = LinearGradient(0f, r.top, 0f, r.bottom, Color.rgb(0x4A, 0x2F, 0x6E), Color.rgb(0x2E, 0x1B, 0x48), Shader.TileMode.CLAMP)
         c.drawRoundRect(r, 18f, 18f, f)
         f.shader = null

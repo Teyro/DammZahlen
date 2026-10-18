@@ -23,9 +23,19 @@ Die Lehrkraft legt Material auf die Tafel, die Kinder schieben, wenden und legen
 - Die Tafel wird still auf dem Gerät gesichert. **Keine Namen, keine Lernstände, kein Konto.**
 - Automatische Updates aus den GitHub-Releases (nur mit derselben Signatur)
 
+## Neu in 0.2
+
+- **Stellenwert**: Stellentafel Z | E mit Zehnerstangen und Einerwürfeln aus dem Vorrat; ab 10 Einern „10 E → 1 Z“ (bündeln),
+  Zehnerstange antippen tauscht sie in 10 Einer (entbündeln); darunter „3 Z 5 E = 35“
+- **Zahlenhaus** und **Zahlenmauer** zum Ausfüllen über einen großen Ziffernblock; Vorgaben der Lehrkraft sind fest
+- **Aufgaben erzeugen**: Plus, Minus, Ergänzen, Verdoppeln, Halbieren, gemischt – bis 10, 20 oder 100, mit oder ohne
+  Zehnerübergang, optional mit Feld zum Legen; „Prüfen“ zeigt grün/rot und „5 von 6 richtig“
+- **Vorlagen**: fertige Beispiele, eigene Vorlagen auf dem Board und in einem geteilten Ordner (für alle Boards)
+- Material-Panel mit Vorschaubildern, Menü beim Antippen eines Materials (füllen, leeren, wenden, verdoppeln, entfernen)
+- Fehlerbehebungen: kein doppeltes Greifen mit zwei Fingern, Blitzblick überlagert sich nicht, Sichern beim Verlassen der App
+
 ## Geplant
 
-0.2 Stellenwert (bündeln/entbündeln), Zahlenhaus, Zahlenmauer, Aufgaben-Generator mit „Prüfen“, eigene Vorlagen teilen ·
 0.3 Rechengeld, Lernuhr, Lineal, Einmaleins-Punktefeld, weitere Szenen (Fähre, U-Bahn, Eierkarton …) ·
 0.4 Geobrett, Spiegeln, Tangram, Strichliste und Diagramm, Würfel
 

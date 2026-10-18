@@ -154,7 +154,7 @@ fun DammZahlenApp(einstellungen: Einstellungen) {
                 }
 
                 // Leere Seite: freundlicher Hinweis für die Lehrkraft
-                if (zustand.seite.teile.isEmpty() && zustand.seite.linien.isEmpty() && !zustand.kindermodus && zustand.ablauf == null) {
+                if (zustand.seite.teile.isEmpty() && zustand.seite.linien.isEmpty() && !zustand.kindermodus && zustand.ablauf == null && panel == null) {
                     Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("Leere Tafel", color = Color(0xCCFFFFFF), fontSize = 54.sp, fontFamily = Grundschrift, fontWeight = FontWeight.Bold)
                         Text("Unten: Material, Zehnerübergang, Aufgaben oder Vorlagen", color = Color(0xB3FFFFFF), fontSize = 28.sp, fontFamily = Grundschrift)
@@ -228,7 +228,7 @@ fun DammZahlenApp(einstellungen: Einstellungen) {
                 if (leerenFrage) Frage("Diese Seite leeren?", "Alles auf dieser Seite wird entfernt (Rückgängig geht).", "Leeren",
                     onNein = { leerenFrage = false }, onJa = { leerenFrage = false; zustand.seiteLeeren() })
                 zustand.pruefErgebnis?.let { (r, g) ->
-                    PruefErgebnis(r, g, onZu = { zustand.pruefErgebnis = null }, modifier = Modifier.align(Alignment.TopCenter).padding(top = 120.dp))
+                    PruefErgebnis(r, g, onZu = { zustand.pruefErgebnis = null }, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 120.dp))
                 }
                 if (aufgabenOffen) AufgabenFenster(zustand, onZu = { aufgabenOffen = false })
                 if (vorlagenOffen) VorlagenFenster(zustand, einstellungen, onZu = { vorlagenOffen = false })

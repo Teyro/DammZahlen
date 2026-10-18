@@ -41,6 +41,10 @@ class Einstellungen(c: Context) {
     var autoUpdate: Boolean
         get() = p.getBoolean("autoUpdate", true)
         set(v) = p.edit().putBoolean("autoUpdate", v).apply()
+    /** Geteilter Vorlagen-Ordner (Dokument-Baum), null = keiner. */
+    var vorlagenOrdner: String?
+        get() = p.getString("vorlagenOrdner", null)
+        set(v) = p.edit().putString("vorlagenOrdner", v).apply()
     var terme: Boolean
         get() = p.getBoolean("terme", true)
         set(v) = p.edit().putBoolean("terme", v).apply()

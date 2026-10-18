@@ -29,6 +29,14 @@ import de.oejendorferdamm.dammzahlen.model.Strahl
 import de.oejendorferdamm.dammzahlen.model.Strich
 import de.oejendorferdamm.dammzahlen.model.Teil
 import de.oejendorferdamm.dammzahlen.model.ZELLE
+import de.oejendorferdamm.dammzahlen.model.Aufgabe
+import de.oejendorferdamm.dammzahlen.model.LernGeometrie
+import de.oejendorferdamm.dammzahlen.model.Stange
+import de.oejendorferdamm.dammzahlen.model.Stellentafel
+import de.oejendorferdamm.dammzahlen.model.Wuerfel
+import de.oejendorferdamm.dammzahlen.model.Zahlenhaus
+import de.oejendorferdamm.dammzahlen.model.Zahlenmauer
+import de.oejendorferdamm.dammzahlen.model.Zelle
 
 /**
  * Zeichnet eine Tafelseite mit android.graphics (schnell, auch mit vielen Teilen). Alle Angaben
@@ -51,9 +59,15 @@ class Zeichner(private val schrift: Typeface, private val schriftFett: Typeface)
             Color.rgb(0x0B, 0x9A, 0x8D), Color.rgb(0xE0, 0x40, 0x8F), Color.rgb(0x1E, 0x6F, 0xD9), Color.rgb(0x8B, 0x5A, 0x2B)
         )
         /** Vorratsablage links: hier liegen neue Plättchen und Figuren, hierher legt man sie zurück. */
-        val VORRAT = RectF(14f, 200f, 118f, 560f)
-        val VORRAT_PLAETTCHEN = RectF(14f, 220f, 118f, 360f)
-        val VORRAT_FIGUR = RectF(14f, 390f, 118f, 540f)
+        val VORRAT_PLAETTCHEN = RectF(14f, 170f, 118f, 320f)
+        val VORRAT_FIGUR = RectF(14f, 330f, 118f, 480f)
+        val VORRAT_STANGE = RectF(14f, 490f, 118f, 710f)
+        val VORRAT_WUERFEL = RectF(14f, 720f, 118f, 850f)
+        /** Vorrat (ohne bzw. mit Stellenwert-Material). */
+        val VORRAT_KLEIN = RectF(14f, 160f, 118f, 490f)
+        val VORRAT_GROSS = RectF(14f, 160f, 118f, 860f)
+        val GRUEN_OK = Color.rgb(0x2E, 0xA0, 0x43)
+        val ROT_FALSCH = Color.rgb(0xE0, 0x40, 0x2E)
         /** Papierkorb oben in der Mitte (nur Lehrkraft, nur während des Ziehens). */
         val PAPIERKORB = RectF(860f, 10f, 1060f, 110f)
     }
@@ -63,8 +77,11 @@ class Zeichner(private val schrift: Typeface, private val schriftFett: Typeface)
      * @param vorhang Blitzblick: Behälter verdeckt
      * @param groesse Einblend-Animation je Teil (1 = fertig)
      */
-    fun zeichne(c: Canvas, seite: Seite, terme: Boolean, vorhang: Boolean, mitVorrat: Boolean, papierkorb: Boolean, groesse: (Long) -> Float) {
-        if (mitVorrat) vorrat(c)
+    fun zeichne(
+        c: Canvas, seite: Seite, terme: Boolean, vorhang: Boolean, mitVorrat: Boolean, papierkorb: Boolean,
+        marken: Map<Long, List<Boolean?>> = emptyMap(), groesse: (Long) -> Float
+    ) {
+        if (mitVorrat) vorrat(c, seite.teile.any { it is Stellentafel })
         if (papierkorb) papierkorb(c)
         // erst die Behälter und Hilfsmittel, dann die Zeichnung, dann die beweglichen Teile obenauf
         for (teil in seite.teile) when (teil) {
@@ -74,12 +91,18 @@ class Zeichner(private val schrift: Typeface, private val schriftFett: Typeface)
             is Strahl -> strahl(c, teil)
             is Strich -> strich(c, teil)
             is Karte -> karte(c, teil)
+            is Stellentafel -> stellentafel(c, teil, seite.teile, terme)
+            is Zahlenhaus -> zahlenhaus(c, teil, marken[teil.id])
+            is Zahlenmauer -> zahlenmauer(c, teil, marken[teil.id])
+            is Aufgabe -> aufgabe(c, teil, marken[teil.id]?.firstOrNull())
             else -> Unit
         }
         for (linie in seite.linien) linie(c, linie)
         for (teil in seite.teile) when (teil) {
             is Plaettchen -> plaettchen(c, teil.x, teil.y, teil.rot, teil.weg, groesse(teil.id))
             is Figur -> figur(c, teil.x, teil.y, teil.art, groesse(teil.id))
+            is Stange -> stange(c, teil.x, teil.y, groesse(teil.id))
+            is Wuerfel -> wuerfel(c, teil.x, teil.y, groesse(teil.id))
             else -> Unit
         }
         if (terme) for (teil in seite.teile) if (Geometrie.istBehaelter(teil)) Geometrie.term(teil, seite.teile)?.let { term(c, teil, it) }
@@ -403,10 +426,10 @@ class Zeichner(private val schrift: Typeface, private val schriftFett: Typeface)
         c.drawText("?", r.centerX(), r.centerY() + t.textSize * 0.35f, t)
     }
 
-    private fun vorrat(c: Canvas) {
+    private fun vorrat(c: Canvas, mitStellen: Boolean) {
         f.shader = null
         f.color = Color.argb(70, 0, 0, 0)
-        c.drawRoundRect(VORRAT, 22f, 22f, f)
+        c.drawRoundRect(if (mitStellen) VORRAT_GROSS else VORRAT_KLEIN, 22f, 22f, f)
         // Stapel Plättchen
         for (i in 2 downTo 0) plaettchen(c, VORRAT_PLAETTCHEN.centerX() + i * 4f, VORRAT_PLAETTCHEN.centerY() - 10f - i * 6f, i % 2 == 0, false)
         t.typeface = schrift
@@ -416,6 +439,198 @@ class Zeichner(private val schrift: Typeface, private val schriftFett: Typeface)
         figur(c, VORRAT_FIGUR.centerX() - 10f, VORRAT_FIGUR.centerY() - 22f, 5)
         figur(c, VORRAT_FIGUR.centerX() + 10f, VORRAT_FIGUR.centerY() - 14f, 2)
         c.drawText("Kinder", VORRAT_FIGUR.centerX(), VORRAT_FIGUR.bottom - 10f, t)
+        if (mitStellen) {
+            stange(c, VORRAT_STANGE.centerX() - 8f, VORRAT_STANGE.centerY() - 22f, 0.55f)
+            stange(c, VORRAT_STANGE.centerX() + 8f, VORRAT_STANGE.centerY() - 18f, 0.55f)
+            c.drawText("Zehner", VORRAT_STANGE.centerX(), VORRAT_STANGE.bottom - 10f, t)
+            wuerfel(c, VORRAT_WUERFEL.centerX() - 6f, VORRAT_WUERFEL.centerY() - 20f)
+            wuerfel(c, VORRAT_WUERFEL.centerX() + 8f, VORRAT_WUERFEL.centerY() - 10f)
+            c.drawText("Einer", VORRAT_WUERFEL.centerX(), VORRAT_WUERFEL.bottom - 10f, t)
+        }
+    }
+
+    // ------------------------------------------------------------ Stellenwert
+
+    private val HOLZ = Color.rgb(0xF2, 0xC1, 0x4E)
+    private val HOLZ_DUNKEL = Color.rgb(0xC8, 0x8E, 0x1E)
+
+    fun wuerfel(c: Canvas, x: Float, y: Float, groesse: Float = 1f) {
+        val w = LernGeometrie.WUERFEL * groesse
+        if (w < 1f) return
+        f.shader = null
+        f.color = Color.argb(60, 0, 0, 0)
+        r.set(x - w / 2 + 2f, y - w / 2 + 3f, x + w / 2 + 2f, y + w / 2 + 3f)
+        c.drawRoundRect(r, 5f, 5f, f)
+        f.color = Color.BLACK
+        f.shader = LinearGradient(x - w / 2, y - w / 2, x + w / 2, y + w / 2, mische(HOLZ, Color.WHITE, 0.25f), HOLZ_DUNKEL, Shader.TileMode.CLAMP)
+        r.set(x - w / 2, y - w / 2, x + w / 2, y + w / 2)
+        c.drawRoundRect(r, 5f, 5f, f)
+        f.shader = null
+        l.color = HOLZ_DUNKEL
+        l.strokeWidth = 2f
+        l.pathEffect = null
+        c.drawRoundRect(r, 5f, 5f, l)
+    }
+
+    /** Zehnerstange: zehn Würfel übereinander (mit Fünfer-Markierung). */
+    fun stange(c: Canvas, x: Float, y: Float, groesse: Float = 1f) {
+        val b = LernGeometrie.STANGE_B * groesse
+        val h = LernGeometrie.STANGE_H * groesse
+        if (b < 1f) return
+        f.shader = null
+        f.color = Color.argb(60, 0, 0, 0)
+        r.set(x - b / 2 + 3f, y - h / 2 + 4f, x + b / 2 + 3f, y + h / 2 + 4f)
+        c.drawRoundRect(r, 5f, 5f, f)
+        f.color = Color.BLACK
+        f.shader = LinearGradient(x - b / 2, 0f, x + b / 2, 0f, mische(HOLZ, Color.WHITE, 0.25f), HOLZ_DUNKEL, Shader.TileMode.CLAMP)
+        r.set(x - b / 2, y - h / 2, x + b / 2, y + h / 2)
+        c.drawRoundRect(r, 5f, 5f, f)
+        f.shader = null
+        l.color = HOLZ_DUNKEL
+        l.pathEffect = null
+        for (i in 1 until 10) {
+            l.strokeWidth = if (i == 5) 3.5f else 1.5f
+            val yy = y - h / 2 + i * h / 10
+            c.drawLine(x - b / 2, yy, x + b / 2, yy, l)
+        }
+        l.strokeWidth = 2f
+        c.drawRoundRect(r, 5f, 5f, l)
+    }
+
+    fun stellentafel(c: Canvas, s: Stellentafel, alle: List<Teil>, mitZahl: Boolean) {
+        val m = Geometrie.masse(s)
+        r.set(s.x, s.y, s.x + m.breite, s.y + m.hoehe)
+        schatten(c, r, 16f)
+        f.shader = null
+        f.color = Color.WHITE
+        c.drawRoundRect(r, 16f, 16f, f)
+        // Kopfzeile Z | E in den üblichen Stellenwert-Farben (Zehner blau, Einer rot)
+        f.color = Color.rgb(0xD8, 0xE7, 0xFB)
+        r.set(s.x + 6f, s.y + 6f, s.x + LernGeometrie.TAFEL_Z_BREITE - 3f, s.y + LernGeometrie.KOPF)
+        c.drawRoundRect(r, 12f, 12f, f)
+        f.color = Color.rgb(0xFB, 0xDD, 0xDB)
+        r.set(s.x + LernGeometrie.TAFEL_Z_BREITE + 3f, s.y + 6f, s.x + m.breite - 6f, s.y + LernGeometrie.KOPF)
+        c.drawRoundRect(r, 12f, 12f, f)
+        t.typeface = schriftFett
+        t.textSize = 44f
+        t.color = BLAU
+        c.drawText("Z", s.x + LernGeometrie.TAFEL_Z_BREITE / 2, s.y + 54f, t)
+        t.color = ROT
+        c.drawText("E", s.x + LernGeometrie.TAFEL_Z_BREITE + LernGeometrie.TAFEL_E_BREITE / 2, s.y + 54f, t)
+        l.color = Color.rgb(0x9A, 0xA3, 0xAE)
+        l.strokeWidth = 3f
+        l.pathEffect = null
+        c.drawLine(s.x + LernGeometrie.TAFEL_Z_BREITE, s.y + 10f, s.x + LernGeometrie.TAFEL_Z_BREITE, s.y + m.hoehe - 10f, l)
+        // Plätze andeuten
+        f.color = Color.rgb(0xEE, 0xF1, 0xF4)
+        for (p in LernGeometrie.stangenPlaetze(s)) {
+            r.set(p.x - LernGeometrie.STANGE_B / 2, p.y - LernGeometrie.STANGE_H / 2, p.x + LernGeometrie.STANGE_B / 2, p.y + LernGeometrie.STANGE_H / 2)
+            c.drawRoundRect(r, 5f, 5f, f)
+        }
+        for (p in LernGeometrie.wuerfelPlaetze(s)) {
+            r.set(p.x - LernGeometrie.WUERFEL / 2, p.y - LernGeometrie.WUERFEL / 2, p.x + LernGeometrie.WUERFEL / 2, p.y + LernGeometrie.WUERFEL / 2)
+            c.drawRoundRect(r, 5f, 5f, f)
+        }
+        l.strokeWidth = 3f
+        r.set(s.x, s.y, s.x + m.breite, s.y + m.hoehe)
+        c.drawRoundRect(r, 16f, 16f, l)
+        val st = LernGeometrie.stellen(s, alle)
+        // „Bündeln“, sobald zehn oder mehr Einer liegen
+        if (st.einer >= 10) {
+            val k = LernGeometrie.buendelnKnopf(s)
+            f.color = Color.rgb(0x1E, 0x6F, 0xD9)
+            r.set(k[0], k[1], k[2], k[3])
+            c.drawRoundRect(r, 30f, 30f, f)
+            t.typeface = schriftFett
+            t.textSize = 30f
+            t.color = Color.WHITE
+            c.drawText("10 E → 1 Z", r.centerX(), r.centerY() + 11f, t)
+        }
+        if (mitZahl && st.zahl > 0 || mitZahl && st.zehner + st.einer > 0) {
+            val text = "${st.zehner} Z  ${st.einer} E  =  ${st.zahl}"
+            t.typeface = schriftFett
+            t.textSize = 44f
+            val breite = t.measureText(text) + 40f
+            val mx = s.x + m.breite / 2
+            val y = s.y + m.hoehe + 16f
+            r.set(mx - breite / 2, y, mx + breite / 2, y + 62f)
+            f.color = Color.argb(150, 0, 0, 0)
+            c.drawRoundRect(r, 31f, 31f, f)
+            t.color = Color.WHITE
+            c.drawText(text, mx, y + 46f, t)
+        }
+    }
+
+    // ------------------------------------------------------------ Zahlenhaus, Zahlenmauer, Aufgaben
+
+    private fun zahlZelle(c: Canvas, rr: FloatArray, zelle: Zelle, ok: Boolean?, fuellung: Int = Color.WHITE) {
+        r.set(rr[0] + 3f, rr[1] + 3f, rr[0] + rr[2] - 3f, rr[1] + rr[3] - 3f)
+        f.shader = null
+        f.color = when (ok) { true -> Color.rgb(0xDC, 0xF5, 0xE1); false -> Color.rgb(0xFD, 0xE2, 0xDE); null -> fuellung }
+        c.drawRoundRect(r, 10f, 10f, f)
+        l.pathEffect = null
+        l.color = when (ok) { true -> GRUEN_OK; false -> ROT_FALSCH; null -> Color.rgb(0x9A, 0xA3, 0xAE) }
+        l.strokeWidth = if (ok != null) 5f else 2.5f
+        c.drawRoundRect(r, 10f, 10f, l)
+        zelle.wert?.let { w ->
+            t.typeface = if (zelle.fest) schriftFett else schrift
+            t.textSize = 50f
+            t.color = if (zelle.fest) Color.rgb(0x22, 0x22, 0x22) else Color.rgb(0x1E, 0x5F, 0xC0)
+            c.drawText("$w", r.centerX(), r.centerY() + 18f, t)
+        }
+    }
+
+    fun zahlenhaus(c: Canvas, h: Zahlenhaus, marken: List<Boolean?>?) {
+        val m = Geometrie.masse(h)
+        // Dach
+        pfad.reset()
+        pfad.moveTo(h.x - 14f, h.y + LernGeometrie.DACH)
+        pfad.lineTo(h.x + m.breite / 2, h.y)
+        pfad.lineTo(h.x + m.breite + 14f, h.y + LernGeometrie.DACH)
+        pfad.close()
+        f.shader = null
+        f.color = Color.argb(55, 0, 0, 0)
+        c.save(); c.translate(4f, 6f); c.drawPath(pfad, f); c.restore()
+        f.color = Color.rgb(0xE5, 0x5A, 0x3C)
+        c.drawPath(pfad, f)
+        t.typeface = schriftFett
+        t.textSize = 56f
+        t.color = Color.WHITE
+        c.drawText("${h.dach}", h.x + m.breite / 2, h.y + LernGeometrie.DACH - 24f, t)
+        // Mauerwerk
+        r.set(h.x, h.y + LernGeometrie.DACH, h.x + m.breite, h.y + m.hoehe)
+        f.color = Color.rgb(0xF4, 0xEF, 0xE6)
+        c.drawRect(r, f)
+        for (i in h.zellen.indices) zahlZelle(c, LernGeometrie.hausZelle(h, i), h.zellen[i], marken?.getOrNull(i / 2), Color.rgb(0xF4, 0xEF, 0xE6))
+    }
+
+    fun zahlenmauer(c: Canvas, m: Zahlenmauer, marken: List<Boolean?>?) {
+        for (i in m.zellen.indices) zahlZelle(c, LernGeometrie.mauerStein(m, i), m.zellen[i], marken?.getOrNull(i), Color.rgb(0xF8, 0xE3, 0xC8))
+    }
+
+    fun aufgabe(c: Canvas, a: Aufgabe, ok: Boolean?) {
+        val m = Geometrie.masse(a)
+        r.set(a.x, a.y, a.x + m.breite, a.y + m.hoehe)
+        schatten(c, r, 18f)
+        f.shader = null
+        f.color = Color.WHITE
+        c.drawRoundRect(r, 18f, 18f, f)
+        var x = a.x + 20f
+        t.typeface = schrift
+        for (teil in a.teile()) {
+            if (teil == "□") {
+                val luecke = floatArrayOf(x, a.y + 10f, 100f, LernGeometrie.AUFGABE_H - 20f)
+                zahlZelle(c, luecke, Zelle(a.eingabe), ok, Color.rgb(0xF2, 0xF5, 0xF9))
+                x += 110f
+            } else {
+                t.typeface = schrift
+                t.textSize = 50f
+                t.color = Color.rgb(0x22, 0x22, 0x22)
+                val w = teil.length * 30f + 18f
+                c.drawText(teil, x + w / 2, a.y + LernGeometrie.AUFGABE_H / 2 + 18f, t)
+                x += w
+            }
+        }
     }
 
     private fun papierkorb(c: Canvas) {

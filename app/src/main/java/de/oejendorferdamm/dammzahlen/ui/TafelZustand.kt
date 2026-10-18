@@ -21,6 +21,15 @@ import de.oejendorferdamm.dammzahlen.model.Strahl
 import de.oejendorferdamm.dammzahlen.model.Strich
 import de.oejendorferdamm.dammzahlen.model.Teil
 import de.oejendorferdamm.dammzahlen.model.Uebergang
+import de.oejendorferdamm.dammzahlen.model.Aufgabe
+import de.oejendorferdamm.dammzahlen.model.LernGeometrie
+import de.oejendorferdamm.dammzahlen.model.Punkt
+import de.oejendorferdamm.dammzahlen.model.Stange
+import de.oejendorferdamm.dammzahlen.model.Stellentafel
+import de.oejendorferdamm.dammzahlen.model.Wuerfel
+import de.oejendorferdamm.dammzahlen.model.Zahlenhaus
+import de.oejendorferdamm.dammzahlen.model.Zahlenmauer
+import de.oejendorferdamm.dammzahlen.model.Zelle
 
 /** Was gerade über die Tafel gelegt ist. */
 enum class Werkzeug { HAND, STIFT }
@@ -71,6 +80,8 @@ class TafelZustand(start: List<Seite>, aktiv: Int) {
     /** Seite ersetzen; [merken] = Rückgängig möglich machen. */
     fun setzeSeite(neu: Seite, merken: Boolean = true, vorher: Seite = seite) {
         if (neu == seite && vorher == seite) return
+        // Nach jeder Änderung gelten alte Prüf-Markierungen nicht mehr
+        if (neu != seite) marken = emptyMap()
         if (merken && vorher != neu) {
             zurueck.addLast(vorher)
             while (zurueck.size > 50) zurueck.removeFirst()
@@ -90,6 +101,173 @@ class TafelZustand(start: List<Seite>, aktiv: Int) {
     private fun zurueckLeeren() {
         zurueck.clear()
         kannZurueck = false
+    }
+
+    // ------------------------------------------------------------ Prüfen
+
+    /** Prüf-Markierungen je Teil (je Zelle bzw. Stockwerk: true richtig, false falsch, null leer). */
+    var marken by mutableStateOf<Map<Long, List<Boolean?>>>(emptyMap())
+        private set
+
+    /** Ergebnis der letzten Prüfung: richtig von gesamt (null = keine Anzeige). */
+    var pruefErgebnis by mutableStateOf<Pair<Int, Int>?>(null)
+
+    fun hatPruefbares() = seite.teile.any { it is Aufgabe || it is Zahlenhaus || it is Zahlenmauer }
+
+    fun pruefen() {
+        val neu = HashMap<Long, List<Boolean?>>()
+        var richtig = 0
+        var gesamt = 0
+        for (t in seite.teile) {
+            val m: List<Boolean?> = when (t) {
+                is Aufgabe -> listOf(t.eingabe?.let { it == t.loesung } ?: false)
+                is Zahlenhaus -> LernGeometrie.hausPruefen(t).map { it ?: false }
+                is Zahlenmauer -> LernGeometrie.mauerPruefen(t).mapIndexed { i, ok -> if (t.zellen[i].fest) null else ok ?: false }
+                else -> continue
+            }
+            neu[t.id] = m
+            richtig += m.count { it == true }
+            gesamt += m.count { it != null }
+        }
+        marken = neu
+        pruefErgebnis = richtig to gesamt
+    }
+
+    /** Zahl in eine Zelle (Zahlenhaus, Mauer) bzw. Lücke (Aufgabe) schreiben; [fest] nur durch die Lehrkraft. */
+    fun setzeZahl(id: Long, index: Int, wert: Int?, fest: Boolean = false) = aendereTeile { liste ->
+        liste.map { t ->
+            if (t.id != id) t else when (t) {
+                is Aufgabe -> t.copy(eingabe = wert)
+                is Zahlenhaus -> t.copy(zellen = t.zellen.mapIndexed { i, z -> if (i == index) Zelle(wert, fest && wert != null) else z })
+                is Zahlenmauer -> t.copy(zellen = t.zellen.mapIndexed { i, z -> if (i == index) Zelle(wert, fest && wert != null) else z })
+                else -> t
+            }
+        }
+    }
+
+    // ------------------------------------------------------------ Stellenwert
+
+    fun buendeln(tafelId: Long) {
+        val tafel = seite.teile.firstOrNull { it.id == tafelId } as? Stellentafel ?: return
+        LernGeometrie.buendeln(tafel, seite.teile, ::neueId)?.let { neu -> aendereTeile { neu } }
+    }
+
+    fun entbuendeln(tafelId: Long, stangeId: Long) {
+        val tafel = seite.teile.firstOrNull { it.id == tafelId } as? Stellentafel ?: return
+        val stange = seite.teile.firstOrNull { it.id == stangeId } as? Stange ?: return
+        LernGeometrie.entbuendeln(tafel, stange, seite.teile, ::neueId)?.let { neu -> aendereTeile { neu } }
+    }
+
+    // ------------------------------------------------------------ Behälter-Menü (Lehrkraft)
+
+    /** Plättchen bzw. Figuren, die gerade in diesem Behälter sitzen. */
+    fun inhaltVon(b: Teil): List<Teil> {
+        val plaetze = Geometrie.plaetze(b) + if (b is Stellentafel) LernGeometrie.stangenPlaetze(b) + LernGeometrie.wuerfelPlaetze(b) else emptyList()
+        return seite.teile.filter { s -> Geometrie.istStueck(s) && plaetze.any { it.abstand(Punkt(s.x, s.y)) < 4f } }
+    }
+
+    /** Behälter mit [anzahl] Plättchen füllen (erst [rot] rote, dann blaue) – vorhandene werden ersetzt. */
+    fun fuellen(id: Long, anzahl: Int, rot: Int) {
+        val b = seite.teile.firstOrNull { it.id == id } ?: return
+        val weg = inhaltVon(b).map { it.id }.toSet()
+        val plaetze = Geometrie.plaetze(b)
+        val jetzt = System.currentTimeMillis()
+        val neu = plaetze.take(anzahl.coerceIn(0, plaetze.size)).mapIndexed { i, p ->
+            if (b is Bus) Figur(neueId(), p.x, p.y, i) else Plaettchen(neueId(), p.x, p.y, rot = i < rot)
+        }
+        neu.forEach { erschienen[it.id] = jetzt }
+        aendereTeile { liste -> liste.filter { it.id !in weg } + neu }
+    }
+
+    fun leeren(id: Long) {
+        val b = seite.teile.firstOrNull { it.id == id } ?: return
+        val weg = inhaltVon(b).map { it.id }.toSet()
+        aendereTeile { liste ->
+            liste.filter { it.id !in weg }.map { t ->
+                when {
+                    t.id != id -> t
+                    t is Zahlenhaus -> t.copy(zellen = t.zellen.map { if (it.fest) it else Zelle() })
+                    t is Zahlenmauer -> t.copy(zellen = t.zellen.map { if (it.fest) it else Zelle() })
+                    t is Aufgabe -> t.copy(eingabe = null)
+                    t is Rahmen -> t.copy(links = List(t.reihen) { 0 })
+                    t is Strahl -> t.copy(marke = null)
+                    else -> t
+                }
+            }
+        }
+    }
+
+    fun wenden(id: Long) {
+        val b = seite.teile.firstOrNull { it.id == id } ?: return
+        val drin = inhaltVon(b).map { it.id }.toSet()
+        aendereTeile { liste -> liste.map { if (it.id in drin && it is Plaettchen) it.copy(rot = !it.rot) else it } }
+    }
+
+    /** Teil entfernen – bei Behältern samt Inhalt. */
+    fun entfernen(id: Long) {
+        val b = seite.teile.firstOrNull { it.id == id } ?: return
+        val weg = inhaltVon(b).map { it.id }.toSet() + id
+        aendereTeile { liste -> liste.filter { it.id !in weg } }
+    }
+
+    fun duplizieren(id: Long) {
+        val b = seite.teile.firstOrNull { it.id == id } ?: return
+        val dx = 40f
+        val kopien = (listOf(b) + inhaltVon(b)).map { t -> umId(t, neueId()).verschoben(t.x + dx, t.y + dx) }
+        val jetzt = System.currentTimeMillis()
+        kopien.forEach { erschienen[it.id] = jetzt }
+        aendereTeile { it + kopien }
+    }
+
+    // ------------------------------------------------------------ Aufgaben, Vorlagen
+
+    /** Neue Seite mit Aufgabenkarten (rechts) und optional einem Feld zum Legen (links). */
+    fun aufgabenSeite(aufgaben: List<Aufgabe>, mitFeld: FeldArt?) {
+        ablaufBeenden()
+        val teile = ArrayList<Teil>()
+        if (mitFeld != null) teile.add(Feld(neueId(), 160f, if (mitFeld == FeldArt.HUNDERTER) 120f else 300f, mitFeld))
+        val links = if (mitFeld == FeldArt.HUNDERTER) 920f else if (mitFeld != null) 980f else 300f
+        val spalten = if (mitFeld != null) 2 else 3
+        aufgaben.forEachIndexed { i, a ->
+            val spalte = i % spalten
+            val zeile = i / spalten
+            teile.add(a.copy(id = neueId(), x = links + spalte * 470f, y = 120f + zeile * 140f))
+        }
+        neueSeiteMit(Seite(teile))
+    }
+
+    fun teilHinzufuegen(t: Teil) {
+        val neu = umId(t, neueId())
+        erschienen[neu.id] = System.currentTimeMillis()
+        aendereTeile { it + neu }
+    }
+
+    /** Seite (z. B. aus einer Vorlage) als neue Seite anhängen – mit frischen Ids. */
+    fun neueSeiteMit(vorlage: Seite) {
+        ablaufBeenden()
+        val neu = vorlage.copy(teile = vorlage.teile.map { umId(it, neueId()) })
+        seiten = if (seite.teile.isEmpty() && seite.linien.isEmpty()) seiten.toMutableList().also { it[aktiv] = neu } else seiten + neu
+        aktiv = seiten.indexOfLast { it === neu }.takeIf { it >= 0 } ?: seiten.lastIndex
+        vorhang = false
+        marken = emptyMap()
+        zurueckLeeren()
+    }
+
+    private fun umId(t: Teil, id: Long): Teil = when (t) {
+        is Plaettchen -> t.copy(id = id)
+        is Figur -> t.copy(id = id)
+        is Feld -> t.copy(id = id)
+        is Bus -> t.copy(id = id)
+        is Rahmen -> t.copy(id = id)
+        is Strahl -> t.copy(id = id)
+        is Strich -> t.copy(id = id)
+        is Karte -> t.copy(id = id)
+        is Stange -> t.copy(id = id)
+        is Wuerfel -> t.copy(id = id)
+        is Stellentafel -> t.copy(id = id)
+        is Zahlenhaus -> t.copy(id = id)
+        is Zahlenmauer -> t.copy(id = id)
+        is Aufgabe -> t.copy(id = id)
     }
 
     // ------------------------------------------------------------ Seiten
@@ -135,6 +313,7 @@ class TafelZustand(start: List<Seite>, aktiv: Int) {
             "strich" -> listOf(Strich(neueId(), 270f, 560f + versatz, 0, 20))
             "plaettchen10" -> List(10) { i -> Plaettchen(neueId(), 500f + versatz + i * 62f, 820f, rot = true) }
             "kinder10" -> List(10) { i -> Figur(neueId(), 500f + versatz + i * 62f, 820f, i + 3) }
+            "stellen" -> listOf(Stellentafel(neueId(), 660f + versatz, 160f + versatz))
             else -> emptyList()
         }
         val jetzt = System.currentTimeMillis()
@@ -228,5 +407,5 @@ class TafelZustand(start: List<Seite>, aktiv: Int) {
 
     // ------------------------------------------------------------ Blitzblick
 
-    fun hatBehaelter() = seite.teile.any { Geometrie.istBehaelter(it) || it is Rahmen }
+    fun hatBehaelter() = seite.teile.any { Geometrie.istBehaelter(it) || it is Rahmen || it is Stellentafel }
 }

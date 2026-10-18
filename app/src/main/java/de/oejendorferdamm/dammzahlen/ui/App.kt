@@ -67,6 +67,14 @@ import kotlinx.coroutines.withContext
 
 private enum class Panel { MATERIAL, STIFT, BLITZ }
 
+/** Offener Ziffernblock: für welches Teil und welche Zelle. */
+private data class ZahlEingabe(val id: Long, val index: Int, val wert: Int?, val lehrkraft: Boolean)
+
+/** Sichert die Tafel sofort (z. B. beim Verlassen der App). */
+object Sicherung {
+    @Volatile var jetzt: (() -> Unit)? = null
+}
+
 @OptIn(FlowPreview::class)
 @Composable
 fun DammZahlenApp(einstellungen: Einstellungen) {
@@ -85,6 +93,17 @@ fun DammZahlenApp(einstellungen: Einstellungen) {
     var pinFrage by remember { mutableStateOf(false) }
     var leerenFrage by remember { mutableStateOf(false) }
     var updateInfo by remember { mutableStateOf<Update.Info?>(null) }
+    var zahlEingabe by remember { mutableStateOf<ZahlEingabe?>(null) }
+    var menueTeil by remember { mutableStateOf<de.oejendorferdamm.dammzahlen.model.Teil?>(null) }
+    var aufgabenOffen by remember { mutableStateOf(false) }
+    var vorlagenOffen by remember { mutableStateOf(false) }
+    var blitz by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+
+    // Beim Verlassen der App sofort sichern (nicht erst nach der Wartezeit)
+    androidx.compose.runtime.DisposableEffect(zustand) {
+        Sicherung.jetzt = { Ablage.speichern(context.applicationContext, zustand.seiten, zustand.aktiv) }
+        onDispose { Sicherung.jetzt = null }
+    }
 
     // Still sichern, eine Sekunde nach der letzten Änderung
     LaunchedEffect(zustand) {
@@ -102,6 +121,10 @@ fun DammZahlenApp(einstellungen: Einstellungen) {
 
     BackHandler {
         when {
+            zahlEingabe != null -> zahlEingabe = null
+            menueTeil != null -> menueTeil = null
+            aufgabenOffen -> aufgabenOffen = false
+            vorlagenOffen -> vorlagenOffen = false
             panel != null -> panel = null
             uebergangOffen -> uebergangOffen = false
             einstellungenOffen -> einstellungenOffen = false
@@ -111,7 +134,15 @@ fun DammZahlenApp(einstellungen: Einstellungen) {
     }
 
     Box(Modifier.fillMaxSize()) {
-        TafelAnsicht(zustand, hintergrund, onKarteBearbeiten = { karte = it }, modifier = Modifier.fillMaxSize())
+        TafelAnsicht(
+            zustand, hintergrund,
+            TafelRueckrufe(
+                karte = { karte = it },
+                zahl = { id, i, wert, lehrkraft -> zahlEingabe = ZahlEingabe(id, i, wert, lehrkraft) },
+                menue = { menueTeil = it }
+            ),
+            modifier = Modifier.fillMaxSize()
+        )
 
         VorbildRaster(faktor = 1f) {
             Box(Modifier.fillMaxSize()) {
@@ -119,6 +150,14 @@ fun DammZahlenApp(einstellungen: Einstellungen) {
                 if (zustand.kindermodus) {
                     Box(Modifier.align(Alignment.TopStart).padding(20.dp).clip(RoundedCornerShape(50)).background(Color(0xCCFFFFFF)).padding(horizontal = 22.dp, vertical = 10.dp)) {
                         Text("Kindermodus", color = TextFarbe, fontSize = 22.sp, fontFamily = Grundschrift, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                // Leere Seite: freundlicher Hinweis für die Lehrkraft
+                if (zustand.seite.teile.isEmpty() && zustand.seite.linien.isEmpty() && !zustand.kindermodus && zustand.ablauf == null) {
+                    Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("Leere Tafel", color = Color(0xCCFFFFFF), fontSize = 54.sp, fontFamily = Grundschrift, fontWeight = FontWeight.Bold)
+                        Text("Unten: Material, Zehnerübergang, Aufgaben oder Vorlagen", color = Color(0xB3FFFFFF), fontSize = 28.sp, fontFamily = Grundschrift)
                     }
                 }
 
@@ -140,6 +179,9 @@ fun DammZahlenApp(einstellungen: Einstellungen) {
                         else if (einstellungen.hatPin) pinFrage = true else zustand.kindermodusAus()
                     },
                     onLeeren = { panel = null; leerenFrage = true },
+                    onAufgaben = { panel = null; aufgabenOffen = true },
+                    onVorlagen = { panel = null; vorlagenOffen = true },
+                    onPruefen = { panel = null; zustand.pruefen() },
                     modifier = Modifier.align(Alignment.BottomCenter)
                 )
 
@@ -151,7 +193,8 @@ fun DammZahlenApp(einstellungen: Einstellungen) {
                     Panel.STIFT -> StiftPanel(zustand, onZu = { panel = null }, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 110.dp))
                     Panel.BLITZ -> BlitzPanel(onWahl = { sek ->
                         panel = null
-                        scope.launch {
+                        blitz?.cancel()
+                        blitz = scope.launch {
                             // Augen auf: kurz zeigen, dann zudecken – „Wie viele?“
                             zustand.vorhang = true
                             delay(900)
@@ -184,6 +227,18 @@ fun DammZahlenApp(einstellungen: Einstellungen) {
                 }
                 if (leerenFrage) Frage("Diese Seite leeren?", "Alles auf dieser Seite wird entfernt (Rückgängig geht).", "Leeren",
                     onNein = { leerenFrage = false }, onJa = { leerenFrage = false; zustand.seiteLeeren() })
+                zustand.pruefErgebnis?.let { (r, g) ->
+                    PruefErgebnis(r, g, onZu = { zustand.pruefErgebnis = null }, modifier = Modifier.align(Alignment.TopCenter).padding(top = 120.dp))
+                }
+                if (aufgabenOffen) AufgabenFenster(zustand, onZu = { aufgabenOffen = false })
+                if (vorlagenOffen) VorlagenFenster(zustand, einstellungen, onZu = { vorlagenOffen = false })
+                menueTeil?.let { t -> BehaelterMenue(t, zustand, onZu = { menueTeil = null }) }
+                zahlEingabe?.let { e ->
+                    Ziffernblock(e.wert, e.lehrkraft, onAbbrechen = { zahlEingabe = null }) { wert, fest ->
+                        zahlEingabe = null
+                        zustand.setzeZahl(e.id, e.index, wert, fest)
+                    }
+                }
                 if (einstellungenOffen) EinstellungenFenster(
                     einstellungen, zustand, hintergrund, updateInfo,
                     onHintergrund = { hintergrund = it; einstellungen.hintergrund = it },
@@ -201,6 +256,7 @@ fun DammZahlenApp(einstellungen: Einstellungen) {
 private fun Leiste(
     zustand: TafelZustand, panel: Panel?, updatePunkt: Boolean,
     onPanel: (Panel) -> Unit, onMenue: () -> Unit, onUebergang: () -> Unit, onSchloss: () -> Unit, onLeeren: () -> Unit,
+    onAufgaben: () -> Unit, onVorlagen: () -> Unit, onPruefen: () -> Unit,
     modifier: Modifier
 ) {
     val kind = zustand.kindermodus
@@ -221,6 +277,8 @@ private fun Leiste(
             if (!kind) {
                 RundKnopf("Material", { onPanel(Panel.MATERIAL) }, ausgewaehlt = panel == Panel.MATERIAL) { SymbolBild(Symbol.MATERIAL, SymbolFarbe) }
                 RundKnopf("Zehnerübergang", onUebergang) { SymbolBild(Symbol.UEBERGANG, SymbolFarbe) }
+                RundKnopf("Aufgaben", onAufgaben) { SymbolBild(Symbol.AUFGABEN, SymbolFarbe) }
+                RundKnopf("Vorlagen", onVorlagen) { SymbolBild(Symbol.VORLAGEN, SymbolFarbe) }
                 RundKnopf("Blitzblick", { onPanel(Panel.BLITZ) }, ausgewaehlt = panel == Panel.BLITZ, aktiviert = zustand.hatBehaelter()) {
                     SymbolBild(Symbol.BLITZ, if (zustand.hatBehaelter()) SymbolFarbe else SymbolFarbeSchwach)
                 }
@@ -231,6 +289,7 @@ private fun Leiste(
                 else zustand.werkzeug = if (zustand.werkzeug == Werkzeug.STIFT) Werkzeug.HAND else Werkzeug.STIFT
             }, ausgewaehlt = zustand.werkzeug == Werkzeug.STIFT) { SymbolBild(Symbol.STIFT, SymbolFarbe) }
             if (!kind) RundKnopf("Seite leeren", onLeeren) { SymbolBild(Symbol.PAPIERKORB, SymbolFarbe) }
+            if (zustand.hatPruefbares()) RundKnopf("Prüfen", onPruefen) { SymbolBild(Symbol.PRUEFEN, Color(0xFF2E7D32)) }
             RundKnopf("Rückgängig", { zustand.rueckgaengig() }, aktiviert = zustand.kannZurueck) {
                 SymbolBild(Symbol.RUECKGAENGIG, if (zustand.kannZurueck) SymbolFarbe else SymbolFarbeSchwach)
             }
@@ -259,23 +318,56 @@ private fun Leiste(
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun MaterialPanel(onWahl: (String) -> Unit, modifier: Modifier) {
-    val eintraege = listOf(
-        "zehner" to "Zehnerfeld", "zwanziger" to "Zwanzigerfeld", "hunderter" to "Hunderterfeld",
-        "bus" to "Bus mit 10 Kindern", "plaettchen10" to "10 Plättchen", "kinder10" to "10 Kinder",
-        "rahmen20" to "Rechenrahmen 20", "rahmen100" to "Rechenrahmen 100",
-        "strahl20" to "Zahlenstrahl 0–20", "strahl100" to "Zahlenstrahl 0–100", "strich" to "Rechenstrich", "karte" to "Karte / Aufgabe …"
-    )
-    PanelRahmen(modifier.widthIn(max = 1100.dp)) {
+    val beispiele = remember { materialBeispiele() }
+    PanelRahmen(modifier.widthIn(max = 1500.dp)) {
         Column {
             Text("Material auf die Tafel legen", color = TextFarbe, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(4.dp))
-            Text("Plättchen und Kinder liegen links im Vorrat – einfach herausziehen. Zurück in den Vorrat = weg.", color = TextFarbeSchwach, fontSize = 18.sp)
+            Text("Plättchen, Kinder, Zehner und Einer liegen links im Vorrat – herausziehen; zurück in den Vorrat = weg. Antippen eines Materials öffnet sein Menü.",
+                color = TextFarbeSchwach, fontSize = 18.sp)
             Spacer(Modifier.height(14.dp))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                eintraege.forEach { (art, name) -> TextKnopf(name, schrift = 21.sp) { onWahl(art) } }
+                beispiele.forEach { (art, name, teile) ->
+                    Column(
+                        Modifier.width(196.dp).clip(RoundedCornerShape(16.dp)).background(Color.White).clickable { onWahl(art) }.padding(10.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Box(Modifier.fillMaxWidth().height(96.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xFF5E8C6A))) {
+                            MaterialVorschau(teile, Modifier.fillMaxSize())
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        Text(name, color = TextFarbe, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                    }
+                }
             }
         }
     }
+}
+
+/** Material mit kleinen Beispiel-Füllungen für die Vorschau im Panel. */
+private fun materialBeispiele(): List<Triple<String, String, List<de.oejendorferdamm.dammzahlen.model.Teil>>> {
+    var id = 1L
+    fun feld(art: de.oejendorferdamm.dammzahlen.model.FeldArt, rot: Int, blau: Int): List<de.oejendorferdamm.dammzahlen.model.Teil> {
+        val f = de.oejendorferdamm.dammzahlen.model.Feld(id++, 0f, 0f, art)
+        val p = de.oejendorferdamm.dammzahlen.model.Geometrie.plaetze(f)
+        return listOf<de.oejendorferdamm.dammzahlen.model.Teil>(f) + (0 until rot + blau).map { de.oejendorferdamm.dammzahlen.model.Plaettchen(id++, p[it].x, p[it].y, it < rot) }
+    }
+    val bus = de.oejendorferdamm.dammzahlen.model.Bus(id++, 0f, 0f)
+    val bp = de.oejendorferdamm.dammzahlen.model.Geometrie.plaetze(bus)
+    return listOf(
+        Triple("zehner", "Zehnerfeld", feld(de.oejendorferdamm.dammzahlen.model.FeldArt.ZEHNER, 6, 2)),
+        Triple("zwanziger", "Zwanzigerfeld", feld(de.oejendorferdamm.dammzahlen.model.FeldArt.ZWANZIGER, 8, 5)),
+        Triple("hunderter", "Hunderterfeld", feld(de.oejendorferdamm.dammzahlen.model.FeldArt.HUNDERTER, 37, 0)),
+        Triple("bus", "Bus mit 10 Kindern", listOf<de.oejendorferdamm.dammzahlen.model.Teil>(bus) + (0..6).map { de.oejendorferdamm.dammzahlen.model.Figur(id++, bp[if (it < 4) it else it + 6].x, bp[if (it < 4) it else it + 6].y, it) }),
+        Triple("stellen", "Stellentafel Z | E", listOf(de.oejendorferdamm.dammzahlen.model.Stellentafel(id++, 0f, 0f), de.oejendorferdamm.dammzahlen.model.Stange(id++, 22f + 15f, 70f + 16f + 150f), de.oejendorferdamm.dammzahlen.model.Wuerfel(id++, 330f + 26f + 18f, 70f + 16f + 18f))),
+        Triple("rahmen20", "Rechenrahmen 20", listOf(de.oejendorferdamm.dammzahlen.model.Rahmen(id++, 0f, 0f, 2, listOf(7, 3)))),
+        Triple("rahmen100", "Rechenrahmen 100", listOf(de.oejendorferdamm.dammzahlen.model.Rahmen(id++, 0f, 0f, 10, List(10) { if (it < 3) 10 else if (it == 3) 4 else 0 }))),
+        Triple("strahl20", "Zahlenstrahl 0–20", listOf(de.oejendorferdamm.dammzahlen.model.Strahl(id++, 0f, 0f, 20, 13))),
+        Triple("strahl100", "Zahlenstrahl 0–100", listOf(de.oejendorferdamm.dammzahlen.model.Strahl(id++, 0f, 0f, 100, 45))),
+        Triple("strich", "Rechenstrich", listOf(de.oejendorferdamm.dammzahlen.model.Strich(id++, 0f, 0f, 0, 20, listOf(de.oejendorferdamm.dammzahlen.model.Sprung(8, 10), de.oejendorferdamm.dammzahlen.model.Sprung(10, 13))))),
+        Triple("plaettchen10", "10 Plättchen", (0 until 10).map { de.oejendorferdamm.dammzahlen.model.Plaettchen(id++, it * 62f, 0f, it < 5) }),
+        Triple("kinder10", "10 Kinder", (0 until 10).map { de.oejendorferdamm.dammzahlen.model.Figur(id++, it * 62f, 0f, it) }),
+        Triple("karte", "Karte / Aufgabe …", listOf(de.oejendorferdamm.dammzahlen.model.Karte(id++, 0f, 0f, "8 + 5 = ?")))
+    )
 }
 
 @Composable

@@ -114,10 +114,10 @@ def main():
     time.sleep(1.5)
     fx, fy = 620, 300
     for i in range(8):
-        welt.ziehe(66, 290, *platz_zwanziger(fx, fy, i))
+        welt.ziehe(66, 240, *platz_zwanziger(fx, fy, i))
         time.sleep(0.4)
     for i in range(8, 13):
-        welt.ziehe(66, 290, *platz_zwanziger(fx, fy, i))
+        welt.ziehe(66, 240, *platz_zwanziger(fx, fy, i))
         time.sleep(0.4)
     # die letzten fünf blau wenden
     for i in range(8, 13):
@@ -201,6 +201,70 @@ def main():
     screenshot("11_blitzblick_zeigen.png")
     time.sleep(3)
     screenshot("12_blitzblick_zugedeckt.png")
+
+    # Aufgaben erzeugen (Plus bis 20, 6 Stück, mit Zwanzigerfeld), eine lösen, prüfen
+    tippe("Aufgaben")
+    time.sleep(1.5)
+    screenshot("14_aufgaben_fenster.png")
+    tippe("Erzeugen")
+    time.sleep(2)
+    screenshot("15_aufgaben_seite.png")
+    welt.tap(980 + 150, 120 + 48)
+    time.sleep(1.5)
+    screenshot("16_ziffernblock.png")
+    tippe("1")
+    tippe("2")
+    tippe("✓")
+    time.sleep(1)
+    tippe("Prüfen")
+    time.sleep(1.5)
+    screenshot("17_gepruft.png")
+    time.sleep(4)
+
+    # Zahlenhaus der 10, eine Zahl eintragen
+    tippe("Aufgaben")
+    time.sleep(1.2)
+    tippe("Zahlenhaus")
+    time.sleep(0.8)
+    tippe("Erzeugen")
+    time.sleep(1.5)
+    welt.tap(820 + 120 + 60, 30 + 110 + 35)
+    time.sleep(1.2)
+    tippe("1")
+    tippe("0")
+    tippe("✓")
+    time.sleep(1)
+    tippe("Prüfen")
+    time.sleep(1.5)
+    screenshot("18_zahlenhaus.png")
+    time.sleep(4)
+
+    # Stellenwert: 12 Einer legen, bündeln
+    tippe("Neue Seite")
+    time.sleep(1)
+    tippe("Material")
+    time.sleep(1.2)
+    tippe("Stellentafel Z | E")
+    time.sleep(1.5)
+    for i in range(12):
+        sp, ze = divmod(i, 5)
+        x = 660 + 330 + 26 + sp * 52 + (12 if sp >= 2 else 0) + 18
+        y = 160 + 70 + 16 + ze * 56 + 18
+        welt.ziehe(66, 770, x, y, 500)
+        time.sleep(0.3)
+    time.sleep(1)
+    screenshot("19_stellenwert_12_einer.png")
+    welt.tap(660 + 330 + 130, 160 + 470 - 60)
+    time.sleep(1.5)
+    screenshot("20_gebuendelt.png")
+
+    # Vorlagen
+    tippe("Vorlagen")
+    time.sleep(1.5)
+    screenshot("21_vorlagen.png")
+    tippe("Bus: Wie viele Kinder fahren mit?")
+    time.sleep(1.5)
+    screenshot("22_vorlage_bus.png")
 
     # Kindermodus
     tippe("Kindermodus")

@@ -111,4 +111,65 @@ class ModellTest {
         assertEquals(1, e.aktiv)
         assertNull(de.oejendorferdamm.dammzahlen.model.SeitenJson.lies("kaputt"))
     }
+
+    @Test
+    fun generatorHaeltRegelnEin() {
+        val r = kotlin.random.Random(1)
+        val mit = de.oejendorferdamm.dammzahlen.model.Generator.aufgaben(de.oejendorferdamm.dammzahlen.model.AufgabenArt.PLUS, 20, de.oejendorferdamm.dammzahlen.model.Uebergangswahl.MIT, 8, r)
+        assertEquals(8, mit.size)
+        assertEquals(8, mit.toSet().size)
+        mit.forEach { assertTrue(it.ergebnis <= 20 && it.b >= 1 && Uebergang.mitUebergang(it.a, it.b, true)) }
+        val ohne = de.oejendorferdamm.dammzahlen.model.Generator.aufgaben(de.oejendorferdamm.dammzahlen.model.AufgabenArt.MINUS, 100, de.oejendorferdamm.dammzahlen.model.Uebergangswahl.OHNE, 10, r)
+        ohne.forEach { assertTrue(it.ergebnis in 0..100 && !Uebergang.mitUebergang(it.a, it.b, false)) }
+        val ergaenzen = de.oejendorferdamm.dammzahlen.model.Generator.aufgaben(de.oejendorferdamm.dammzahlen.model.AufgabenArt.ERGAENZEN, 10, de.oejendorferdamm.dammzahlen.model.Uebergangswahl.EGAL, 4, r)
+        ergaenzen.forEach { assertEquals(1, it.luecke); assertEquals(it.b, it.loesung) }
+        val haelfte = de.oejendorferdamm.dammzahlen.model.Generator.aufgaben(de.oejendorferdamm.dammzahlen.model.AufgabenArt.HALBIEREN, 20, de.oejendorferdamm.dammzahlen.model.Uebergangswahl.EGAL, 5, r)
+        haelfte.forEach { assertEquals(0, it.a % 2) }
+    }
+
+    @Test
+    fun zahlenhausUndMauer() {
+        val h = de.oejendorferdamm.dammzahlen.model.Zahlenhaus(1, 0f, 0f, 7, de.oejendorferdamm.dammzahlen.model.Generator.zahlenhaus(7, true))
+        assertEquals(8, h.stockwerke)
+        val ausgefuellt = h.copy(zellen = h.zellen.mapIndexed { i, z -> if (i % 2 == 1) de.oejendorferdamm.dammzahlen.model.Zelle(7 - h.zellen[i - 1].wert!!) else z })
+        assertTrue(de.oejendorferdamm.dammzahlen.model.LernGeometrie.hausPruefen(ausgefuellt).all { it == true })
+        val zellen = de.oejendorferdamm.dammzahlen.model.Generator.zahlenmauer(3, 20, kotlin.random.Random(3))
+        assertEquals(6, zellen.size)
+        val m = de.oejendorferdamm.dammzahlen.model.Zahlenmauer(2, 0f, 0f, 3, zellen)
+        val u = zellen.take(3).map { it.wert!! }
+        val richtig = m.copy(zellen = zellen.take(3) + listOf(u[0] + u[1], u[1] + u[2], u[0] + 2 * u[1] + u[2]).map { de.oejendorferdamm.dammzahlen.model.Zelle(it) })
+        assertTrue(de.oejendorferdamm.dammzahlen.model.LernGeometrie.mauerPruefen(richtig).drop(3).all { it == true })
+        assertTrue(u[0] + 2 * u[1] + u[2] <= 20)
+    }
+
+    @Test
+    fun stellenwertBuendeln() {
+        val t = de.oejendorferdamm.dammzahlen.model.Stellentafel(1, 0f, 0f)
+        val wp = de.oejendorferdamm.dammzahlen.model.LernGeometrie.wuerfelPlaetze(t)
+        var teile: List<de.oejendorferdamm.dammzahlen.model.Teil> = listOf(t) + (0 until 12).map { de.oejendorferdamm.dammzahlen.model.Wuerfel(10L + it, wp[it].x, wp[it].y) }
+        assertEquals(12, de.oejendorferdamm.dammzahlen.model.LernGeometrie.stellen(t, teile).zahl)
+        teile = de.oejendorferdamm.dammzahlen.model.LernGeometrie.buendeln(t, teile, ::neu)!!
+        val st = de.oejendorferdamm.dammzahlen.model.LernGeometrie.stellen(t, teile)
+        assertEquals(1, st.zehner)
+        assertEquals(2, st.einer)
+        val stange = teile.filterIsInstance<de.oejendorferdamm.dammzahlen.model.Stange>().single()
+        teile = de.oejendorferdamm.dammzahlen.model.LernGeometrie.entbuendeln(t, stange, teile, ::neu)!!
+        assertEquals(12, de.oejendorferdamm.dammzahlen.model.LernGeometrie.stellen(t, teile).einer)
+        // Stange über der Zehner-Spalte rastet ein, auch wenn sie höher losgelassen wird
+        val sp = de.oejendorferdamm.dammzahlen.model.LernGeometrie.stangenPlaetze(t)
+        val lose = de.oejendorferdamm.dammzahlen.model.Stange(99, sp[0].x + 5f, sp[0].y - 80f)
+        assertEquals(sp[0], Geometrie.einrasten(lose, listOf(t, lose)))
+    }
+
+    @Test
+    fun neueTeileSpeichern() {
+        val teile = listOf(
+            de.oejendorferdamm.dammzahlen.model.Stellentafel(1, 5f, 6f), de.oejendorferdamm.dammzahlen.model.Stange(2, 1f, 2f), de.oejendorferdamm.dammzahlen.model.Wuerfel(3, 3f, 4f),
+            de.oejendorferdamm.dammzahlen.model.Zahlenhaus(4, 0f, 0f, 5, de.oejendorferdamm.dammzahlen.model.Generator.zahlenhaus(5, true)),
+            de.oejendorferdamm.dammzahlen.model.Zahlenmauer(5, 0f, 0f, 3, listOf(1, 2, 3).map { de.oejendorferdamm.dammzahlen.model.Zelle(it, true) } + listOf(de.oejendorferdamm.dammzahlen.model.Zelle(3), de.oejendorferdamm.dammzahlen.model.Zelle(), de.oejendorferdamm.dammzahlen.model.Zelle())),
+            de.oejendorferdamm.dammzahlen.model.Aufgabe(6, 1f, 1f, 8, 5, de.oejendorferdamm.dammzahlen.model.Rechenart.PLUS, 1, 5)
+        )
+        val s = listOf(de.oejendorferdamm.dammzahlen.model.Seite(teile))
+        assertEquals(s, de.oejendorferdamm.dammzahlen.model.SeitenJson.lies(de.oejendorferdamm.dammzahlen.model.SeitenJson.schreibe(s, 0))!!.seiten)
+    }
 }

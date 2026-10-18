@@ -109,7 +109,14 @@ object Geometrie {
         is Karte -> Masse(maxOf(220f, t.text.length * 34f + 60f), 100f)
         is Plaettchen -> Masse(2 * PLAETTCHEN_R, 2 * PLAETTCHEN_R)
         is Figur -> Masse(FIGUR_B, FIGUR_H)
+        else -> LernGeometrie.masse(t)
     }
+
+    /** Teile, die Kinder schieben dürfen (Plättchen, Figuren, Stangen, Würfel). */
+    fun istStueck(t: Teil) = t.beweglichFuerKinder
+
+    /** Bewegliche Teile liegen mit ihrer Mitte bei (x, y), alles andere mit der linken oberen Ecke. */
+    fun mitteBezogen(t: Teil) = istStueck(t)
 
     const val FIGUR_B = 50f
     const val FIGUR_H = 60f
@@ -151,17 +158,31 @@ object Geometrie {
     fun trifft(t: Teil, px: Float, py: Float): Boolean = when (t) {
         is Plaettchen -> hypot(px - t.x, py - t.y) <= PLAETTCHEN_R + 8f
         is Figur -> abs(px - t.x) <= FIGUR_B / 2 + 6f && abs(py - t.y) <= FIGUR_H / 2 + 6f
+        is Stange -> abs(px - t.x) <= LernGeometrie.STANGE_B / 2 + 10f && abs(py - t.y) <= LernGeometrie.STANGE_H / 2 + 6f
+        is Wuerfel -> abs(px - t.x) <= LernGeometrie.WUERFEL / 2 + 10f && abs(py - t.y) <= LernGeometrie.WUERFEL / 2 + 10f
         else -> masse(t).let { m -> px >= t.x && py >= t.y && px <= t.x + m.breite && py <= t.y + m.hoehe }
     }
 
     /** Nächster freier Platz in einem Behälter (innerhalb von 0,8 Zellen – ist der getroffene belegt, rutscht es in den Nachbarn), sonst null. */
     fun einrasten(stueck: Teil, alle: List<Teil>): Punkt? {
-        val belegt = alle.filter { (it is Plaettchen || it is Figur) && it.id != stueck.id }.map { Punkt(it.x, it.y) }
+        // Stangen und Würfel rasten in die Stellentafel, Plättchen und Figuren in Felder und Bus
+        val gleicheArt: (Teil) -> Boolean = when (stueck) {
+            is Stange -> { t -> t is Stange }
+            is Wuerfel -> { t -> t is Wuerfel }
+            else -> { t -> t is Plaettchen || t is Figur }
+        }
+        val kandidaten: List<Punkt> = when (stueck) {
+            is Stange -> alle.filterIsInstance<Stellentafel>().flatMap { LernGeometrie.stangenPlaetze(it) }
+            is Wuerfel -> alle.filterIsInstance<Stellentafel>().flatMap { LernGeometrie.wuerfelPlaetze(it) }
+            else -> alle.filter { istBehaelter(it) }.flatMap { plaetze(it) }
+        }
+        val belegt = alle.filter { gleicheArt(it) && it.id != stueck.id }.map { Punkt(it.x, it.y) }
         var bester: Punkt? = null
-        var abstand = ZELLE * 0.8f
+        // Stangen sind hoch: es zählt vor allem, über welcher Spalte sie losgelassen werden
+        var abstand = if (stueck is Stange) 60f else ZELLE * 0.8f
         val p = Punkt(stueck.x, stueck.y)
-        for (b in alle) if (istBehaelter(b)) for (platz in plaetze(b)) {
-            val d = platz.abstand(p)
+        for (platz in kandidaten) run {
+            val d = if (stueck is Stange) abs(platz.x - p.x) + abs(platz.y - p.y) * 0.15f else platz.abstand(p)
             if (d < abstand && belegt.none { it.abstand(platz) < 4f }) {
                 abstand = d
                 bester = platz

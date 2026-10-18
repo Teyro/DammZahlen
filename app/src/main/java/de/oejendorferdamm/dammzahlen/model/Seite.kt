@@ -46,7 +46,22 @@ object SeitenJson {
                 t.spruenge.forEach { put(JSONObject().put("von", it.von).put("bis", it.bis)) }
             })
             is Karte -> put("typ", "karte").put("text", t.text)
+            is Stange -> put("typ", "stange")
+            is Wuerfel -> put("typ", "wuerfel")
+            is Stellentafel -> put("typ", "stellentafel")
+            is Zahlenhaus -> put("typ", "zahlenhaus").put("dach", t.dach).put("zellen", zellen(t.zellen))
+            is Zahlenmauer -> put("typ", "zahlenmauer").put("stufen", t.stufen).put("zellen", zellen(t.zellen))
+            is Aufgabe -> put("typ", "aufgabe").put("a", t.a).put("b", t.b).put("art", t.art.name).put("luecke", t.luecke).apply { t.eingabe?.let { put("eingabe", it) } }
         }
+    }
+
+    private fun zellen(z: List<Zelle>) = JSONArray().apply {
+        z.forEach { put(JSONObject().put("fest", it.fest).apply { it.wert?.let { w -> put("wert", w) } }) }
+    }
+
+    private fun zellenLesen(a: JSONArray?, anzahl: Int): List<Zelle> = List(anzahl) { i ->
+        val o = a?.optJSONObject(i)
+        Zelle(if (o != null && o.has("wert")) o.optInt("wert").coerceIn(-999, 9999) else null, o?.optBoolean("fest", false) ?: false)
     }
 
     data class Ergebnis(val seiten: List<Seite>, val aktiv: Int)
@@ -98,6 +113,21 @@ object SeitenJson {
                     o.optDouble("breite", Geometrie.STRICH_BREITE.toDouble()).toFloat().coerceIn(300f, 1700f))
             }
             "karte" -> Karte(id, x, y, o.optString("text").take(60))
+            "stange" -> Stange(id, x, y)
+            "wuerfel" -> Wuerfel(id, x, y)
+            "stellentafel" -> Stellentafel(id, x, y)
+            "zahlenhaus" -> {
+                val stock = ((o.optJSONArray("zellen")?.length() ?: 0) / 2).coerceIn(1, 21)
+                Zahlenhaus(id, x, y, o.optInt("dach", 10).coerceIn(0, 100), zellenLesen(o.optJSONArray("zellen"), 2 * stock))
+            }
+            "zahlenmauer" -> {
+                val stufen = o.optInt("stufen", 3).coerceIn(2, 5)
+                Zahlenmauer(id, x, y, stufen, zellenLesen(o.optJSONArray("zellen"), stufen * (stufen + 1) / 2))
+            }
+            "aufgabe" -> Rechenart.entries.find { it.name == o.optString("art") }?.let { art ->
+                Aufgabe(id, x, y, o.optInt("a").coerceIn(0, 200), o.optInt("b").coerceIn(0, 200), art, o.optInt("luecke", 2).coerceIn(0, 2),
+                    if (o.has("eingabe")) o.optInt("eingabe") else null)
+            }
             else -> null
         }
     }

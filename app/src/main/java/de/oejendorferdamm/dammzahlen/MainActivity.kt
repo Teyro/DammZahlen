@@ -35,6 +35,11 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onStop() {
+        de.oejendorferdamm.dammzahlen.ui.Sicherung.jetzt?.invoke()
+        super.onStop()
+    }
+
     override fun onResume() {
         super.onResume()
         vollbild()

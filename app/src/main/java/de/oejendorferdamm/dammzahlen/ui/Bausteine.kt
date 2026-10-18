@@ -110,7 +110,7 @@ fun TextKnopf(text: String, modifier: Modifier = Modifier, hervorgehoben: Boolea
     }
 }
 
-enum class Symbol { MENUE, SCHLOSS, SCHLOSS_OFFEN, MATERIAL, UEBERGANG, BLITZ, TERM, STIFT, PAPIERKORB, RUECKGAENGIG, ZURUECKSETZEN, LINKS, RECHTS, PLUS, SCHLIESSEN }
+enum class Symbol { AUFGABEN, VORLAGEN, PRUEFEN, MENUE, SCHLOSS, SCHLOSS_OFFEN, MATERIAL, UEBERGANG, BLITZ, TERM, STIFT, PAPIERKORB, RUECKGAENGIG, ZURUECKSETZEN, LINKS, RECHTS, PLUS, SCHLIESSEN }
 
 /** Schlichte Symbole, selbst gezeichnet – keine zusätzliche Bibliothek. */
 @Composable
@@ -122,6 +122,17 @@ fun SymbolBild(symbol: Symbol, farbe: Color, modifier: Modifier = Modifier.size(
         val dick = Stroke(width = s * 0.09f, cap = StrokeCap.Round)
         fun linie(a: Offset, b: Offset) = drawLine(farbe, a, b, s * 0.09f, StrokeCap.Round)
         when (symbol) {
+            Symbol.AUFGABEN -> {
+                drawRoundRect(farbe, p(0.18f, 0.12f), Size(s * 0.64f, s * 0.78f), androidx.compose.ui.geometry.CornerRadius(s * 0.06f), style = Stroke(s * 0.07f))
+                linie(p(0.32f, 0.36f), p(0.48f, 0.36f)); linie(p(0.4f, 0.28f), p(0.4f, 0.44f))
+                linie(p(0.56f, 0.32f), p(0.7f, 0.32f)); linie(p(0.56f, 0.42f), p(0.7f, 0.42f))
+                linie(p(0.32f, 0.64f), p(0.68f, 0.64f))
+            }
+            Symbol.VORLAGEN -> {
+                drawRoundRect(farbe, p(0.28f, 0.14f), Size(s * 0.56f, s * 0.6f), androidx.compose.ui.geometry.CornerRadius(s * 0.05f), style = Stroke(s * 0.07f))
+                drawRoundRect(farbe, p(0.16f, 0.26f), Size(s * 0.56f, s * 0.6f), androidx.compose.ui.geometry.CornerRadius(s * 0.05f))
+            }
+            Symbol.PRUEFEN -> { linie(p(0.18f, 0.52f), p(0.42f, 0.76f)); linie(p(0.42f, 0.76f), p(0.84f, 0.26f)) }
             Symbol.MENUE -> { linie(p(0.18f, 0.28f), p(0.82f, 0.28f)); linie(p(0.18f, 0.5f), p(0.82f, 0.5f)); linie(p(0.18f, 0.72f), p(0.82f, 0.72f)) }
             Symbol.SCHLOSS, Symbol.SCHLOSS_OFFEN -> {
                 drawRoundRect(farbe, p(0.2f, 0.45f), Size(s * 0.6f, s * 0.42f), androidx.compose.ui.geometry.CornerRadius(s * 0.06f))

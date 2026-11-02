@@ -596,6 +596,7 @@ private fun EinstellungenFenster(
                 color = TextFarbeSchwach, fontSize = 18.sp)
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                TextKnopf("Damm-Apps in F-Droid") { oeffneFDroidRepo(context) }
                 TextKnopf("Jetzt suchen") {
                     updateText = "Sucht …"
                     scope.launch {
@@ -652,4 +653,16 @@ private fun Zeile(text: String, an: Boolean, onAendern: (Boolean) -> Unit) {
         Text(text, color = TextFarbe, fontSize = 20.sp, modifier = Modifier.weight(1f))
         Switch(checked = an, onCheckedChange = onAendern)
     }
+}
+
+/** Öffnet F-Droid mit der Frage „Paketquelle hinzufügen?“ (alle Damm-Apps) – ohne F-Droid die Anleitungsseite mit QR-Code. */
+private fun oeffneFDroidRepo(context: android.content.Context) {
+    val repo = "teyro.github.io/damm-fdroid/repo?fingerprint=db7f158b6eb2c7eb17e79aa4a9ae0e9487c3c2228fe7de60b37a1979408c0604"
+    for (adresse in listOf("fdroidrepos://$repo", "https://teyro.github.io/damm-fdroid/")) {
+        try {
+            context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(adresse)).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+            return
+        } catch (_: android.content.ActivityNotFoundException) {}
+    }
+    android.widget.Toast.makeText(context, "Weder F-Droid noch ein Browser ist installiert", android.widget.Toast.LENGTH_LONG).show()
 }

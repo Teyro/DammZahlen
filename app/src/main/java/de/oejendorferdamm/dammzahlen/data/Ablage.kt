@@ -39,8 +39,8 @@ class Einstellungen(c: Context) {
         get() = p.getInt("hintergrund", TAFELGRUEN)
         set(v) = p.edit().putInt("hintergrund", v).apply()
     var autoUpdate: Boolean
-        get() = p.getBoolean("autoUpdate", true)
-        set(v) = p.edit().putBoolean("autoUpdate", v).apply()
+        get() = p.getBoolean("autoUpdate2", false) // neuer Schlüssel (0.2.2): überall erst einmal aus
+        set(v) = p.edit().putBoolean("autoUpdate2", v).apply()
     /** Geteilter Vorlagen-Ordner (Dokument-Baum), null = keiner. */
     var vorlagenOrdner: String?
         get() = p.getString("vorlagenOrdner", null)

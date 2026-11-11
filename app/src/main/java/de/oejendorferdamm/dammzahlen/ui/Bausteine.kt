@@ -16,6 +16,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -50,7 +53,9 @@ val TextFarbe = Color(0xFF333333)
 val TextFarbeSchwach = Color(0xFF777777)
 val PanelFarbe = Color(0xFFEDEDED)
 val PanelAuswahl = Color(0xFFBDBDBD)
-val AkzentBlau = Color(0xFF1E6FD9)
+val AkzentBlau = Color(0xFFE01E3C) // Fenster, Knöpfe und Schalter wie in DammZeit (Name bleibt aus Gewohnheit)
+val FensterGrund = Color(0xFFECEEF1)
+val Dunkel = Color(0xFF1F2124)
 val SchliessenRot = Color(0xFFC62828)
 val HinweisRot = Color(0xFFE0402E)
 
@@ -98,16 +103,41 @@ fun PanelRahmen(modifier: Modifier = Modifier, inhalt: @Composable () -> Unit) {
 /** Breiter Knopf mit Text (in Panels und Fenstern). */
 @Composable
 fun TextKnopf(text: String, modifier: Modifier = Modifier, hervorgehoben: Boolean = false, schrift: TextUnit = 20.sp, onClick: () -> Unit) {
+    val quelle = remember { MutableInteractionSource() }
     Box(
         modifier
+            .drueckFeder(quelle)
+            .shadow(if (hervorgehoben) 0.dp else 2.dp, RoundedCornerShape(50))
             .clip(RoundedCornerShape(50))
-            .background(if (hervorgehoben) AkzentBlau else Color.White)
-            .clickable(role = Role.Button, onClick = onClick)
+            .background(if (hervorgehoben) Dunkel else Color.White)
+            .clickable(quelle, androidx.compose.material3.ripple(), role = Role.Button, onClick = onClick)
             .padding(horizontal = 22.dp, vertical = 12.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(text, color = if (hervorgehoben) Color.White else TextFarbe, fontSize = schrift, fontWeight = FontWeight.SemiBold)
     }
+}
+
+/** Knöpfe geben beim Drücken nach und federn zurück (wie in DammZeit). */
+@Composable
+fun Modifier.drueckFeder(quelle: MutableInteractionSource): Modifier {
+    val gedrueckt by quelle.collectIsPressedAsState()
+    val faktor by androidx.compose.animation.core.animateFloatAsState(
+        if (gedrueckt) 0.92f else 1f, androidx.compose.animation.core.spring(dampingRatio = 0.45f, stiffness = 600f), label = "feder"
+    )
+    return this.scale(faktor)
+}
+
+/** Weißer runder Knopf für Fenster (✕, ‹) – wie in DammZeit. */
+@Composable
+fun FensterKnopf(beschreibung: String, onClick: () -> Unit, inhalt: @Composable BoxScope.() -> Unit) {
+    val quelle = remember { MutableInteractionSource() }
+    Box(
+        Modifier.drueckFeder(quelle).size(72.dp).shadow(3.dp, CircleShape).clip(CircleShape).background(Color.White)
+            .clickable(quelle, androidx.compose.material3.ripple(), role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = beschreibung },
+        contentAlignment = Alignment.Center, content = inhalt
+    )
 }
 
 enum class Symbol { AUFGABEN, VORLAGEN, PRUEFEN, MENUE, SCHLOSS, SCHLOSS_OFFEN, MATERIAL, UEBERGANG, BLITZ, TERM, STIFT, PAPIERKORB, RUECKGAENGIG, ZURUECKSETZEN, LINKS, RECHTS, PLUS, SCHLIESSEN }

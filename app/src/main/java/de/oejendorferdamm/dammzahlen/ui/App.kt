@@ -378,7 +378,7 @@ private fun StiftPanel(zustand: TafelZustand, onZu: () -> Unit, modifier: Modifi
             farben.forEach { f ->
                 Box(
                     Modifier.size(54.dp).clip(CircleShape).background(Color(f))
-                        .border(if (zustand.stiftFarbe == f) 5.dp else 2.dp, if (zustand.stiftFarbe == f) AkzentBlau else Color(0xFF9E9E9E), CircleShape)
+                        .border(if (zustand.stiftFarbe == f) 5.dp else 2.dp, if (zustand.stiftFarbe == f) Dunkel else Color(0xFF9E9E9E), CircleShape)
                         .clickable { zustand.stiftFarbe = f; onZu() }
                 )
             }
@@ -423,18 +423,23 @@ private fun AblaufKarte(titel: String, schritt: Int, anzahl: Int, onZurueck: () 
 // ---------------------------------------------------------------- Fenster
 
 @Composable
-fun Fenster(titel: String, onAbbrechen: () -> Unit, breite: Int = 900, inhalt: @Composable () -> Unit) {
+fun Fenster(titel: String, onAbbrechen: () -> Unit, breite: Int = 900, onZurueck: (() -> Unit)? = null, inhalt: @Composable () -> Unit) {
     Box(
         Modifier.fillMaxSize().background(Color(0x99000000)).clickable(remember { MutableInteractionSource() }, null, onClick = onAbbrechen),
         contentAlignment = Alignment.Center
     ) {
         Column(
             Modifier.widthIn(max = breite.dp).fillMaxWidth(0.9f).shadow(16.dp, RoundedCornerShape(24.dp)).clip(RoundedCornerShape(24.dp))
-                .background(PanelFarbe).clickable(remember { MutableInteractionSource() }, null) {}.padding(32.dp)
+                .background(FensterGrund).clickable(remember { MutableInteractionSource() }, null) {}.padding(32.dp)
         ) {
+            // Kopf wie in allen Schul-Apps: ‹ zurück (in Unterseiten), Titel, ✕ immer rechts oben
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(titel, color = TextFarbe, fontSize = 32.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                RundKnopf("Schließen", onAbbrechen) { SymbolBild(Symbol.SCHLIESSEN, SymbolFarbe) }
+                if (onZurueck != null) {
+                    FensterKnopf("Zurück zur Übersicht", onZurueck) { SymbolBild(Symbol.LINKS, Dunkel, Modifier.size(32.dp)) }
+                    Spacer(Modifier.width(18.dp))
+                }
+                Text(titel, color = Dunkel, fontSize = 32.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                FensterKnopf("Schließen", onAbbrechen) { SymbolBild(Symbol.SCHLIESSEN, Dunkel, Modifier.size(30.dp)) }
             }
             Spacer(Modifier.height(16.dp))
             inhalt()
@@ -562,14 +567,28 @@ private fun EinstellungenFenster(
     var pinSetzen by remember { mutableStateOf(false) }
     var updateText by remember { mutableStateOf("") }
     var fortschritt by remember { mutableFloatStateOf(-1f) }
-    Fenster("Einstellungen", onSchliessen, breite = 1000) {
+    var seite by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
+    androidx.activity.compose.BackHandler(enabled = seite != null) { seite = null }
+    val titel = when (seite) { "tafel" -> "Tafel"; "kinder" -> "Kindermodus"; "update" -> "Updates"; "ueber" -> "Über DammZahlen"; else -> "Einstellungen" }
+    Fenster(titel, onSchliessen, breite = 1000, onZurueck = if (seite != null) ({ seite = null }) else null) {
+        androidx.compose.runtime.key(seite) {
         Column(Modifier.verticalScroll(rememberScrollState())) {
-            Text("Tafel", color = AkzentBlau, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+          when (seite) {
+            null -> {
+                BereichZeile("🎨", Color(0xFF7C3AED), "Tafel", "Hintergrund · Rechnung unter Feldern ${if (zustand.terme) "an" else "aus"} · Seite löschen") { seite = "tafel" }
+                BereichZeile("🧒", Color(0xFF16A34A), "Kindermodus", if (hatPin) "mit PIN geschützt" else "ohne PIN") { seite = "kinder" }
+                BereichZeile("⬆️", Color(0xFF2563EB), "Updates",
+                    updateInfo?.let { "Neue Version ${it.version} verfügbar" } ?: "Installiert: ${BuildConfig.VERSION_NAME} · automatisch ${if (autoUpdate) "an" else "aus"}",
+                    hinweis = updateInfo != null) { seite = "update" }
+                BereichZeile("ℹ️", Color(0xFF6B7280), "Über DammZahlen", "Version ${BuildConfig.VERSION_NAME} · Schrift · Datenschutz") { seite = "ueber" }
+            }
+            "tafel" -> {
+            Text("Hintergrund", color = TextFarbeSchwach, fontSize = 20.sp)
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 Einstellungen.HINTERGRUENDE.forEach { f ->
                     Box(Modifier.size(64.dp).clip(CircleShape).background(Color(f))
-                        .border(if (f == hintergrund) 5.dp else 2.dp, if (f == hintergrund) AkzentBlau else Color(0xFF9E9E9E), CircleShape)
+                        .border(if (f == hintergrund) 5.dp else 2.dp, if (f == hintergrund) Dunkel else Color(0xFF9E9E9E), CircleShape)
                         .clickable { onHintergrund(f) })
                 }
             }
@@ -578,9 +597,8 @@ private fun EinstellungenFenster(
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 TextKnopf("Diese Seite löschen") { zustand.seiteLoeschen() }
             }
-
-            Spacer(Modifier.height(24.dp))
-            Text("Kindermodus", color = AkzentBlau, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            }
+            "kinder" -> {
             Text("Im Kindermodus können Kinder Plättchen und Figuren schieben und wenden – sonst nichts. „Zurücksetzen“ stellt die Aufgabe wieder her. " +
                 if (hatPin) "Zum Beenden ist eine PIN nötig." else "Ohne PIN kann jede/r den Kindermodus beenden.", color = TextFarbeSchwach, fontSize = 18.sp)
             Spacer(Modifier.height(8.dp))
@@ -588,9 +606,8 @@ private fun EinstellungenFenster(
                 TextKnopf(if (hatPin) "PIN ändern …" else "PIN festlegen …") { pinSetzen = true }
                 if (hatPin) TextKnopf("PIN entfernen") { einstellungen.setzePin(null); hatPin = false }
             }
-
-            Spacer(Modifier.height(24.dp))
-            Text("Updates", color = AkzentBlau, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            }
+            "update" -> {
             Zeile("Beim Start nach Updates suchen", autoUpdate) { autoUpdate = it; einstellungen.autoUpdate = it }
             Text("Installiert: ${BuildConfig.VERSION_NAME}" + (updateInfo?.let { " · Neu: ${it.version}" } ?: "") + (if (updateText.isNotEmpty()) " · $updateText" else ""),
                 color = TextFarbeSchwach, fontSize = 18.sp)
@@ -623,15 +640,17 @@ private fun EinstellungenFenster(
                     }
                 }
             }
-
-            Spacer(Modifier.height(24.dp))
-            Text("Über DammZahlen", color = AkzentBlau, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            }
+            else -> {
             Text(
                 "Mathe-Legetafel für Klasse 1 und 2 (Bildungsplan Hamburg). Freie Software unter der GNU GPL v3, Quelltext: github.com/Teyro/DammZahlen.\n" +
                     "Schrift: Grundschrift von Christian Urff (www.urff.info), Lizenz CC BY 3.0.\n" +
                     "Es werden keine Namen oder Lernstände gespeichert – nur die Tafel selbst, auf diesem Gerät.",
                 color = TextFarbeSchwach, fontSize = 18.sp
             )
+            }
+          }
+        }
         }
     }
     if (pinSetzen) {
@@ -651,7 +670,29 @@ private fun EinstellungenFenster(
 private fun Zeile(text: String, an: Boolean, onAendern: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth().clickable { onAendern(!an) }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(text, color = TextFarbe, fontSize = 20.sp, modifier = Modifier.weight(1f))
-        Switch(checked = an, onCheckedChange = onAendern)
+        Switch(checked = an, onCheckedChange = onAendern, colors = androidx.compose.material3.SwitchDefaults.colors(checkedTrackColor = AkzentBlau, checkedThumbColor = Color.White))
+    }
+}
+
+/** Zeile der Übersicht (wie in DammZeit): Symbol im Farbkreis, Titel, Kurzfassung, Pfeil. */
+@Composable
+private fun BereichZeile(symbol: String, farbe: Color, titel: String, text: String, hinweis: Boolean = false, onClick: () -> Unit) {
+    val quelle = remember { MutableInteractionSource() }
+    Row(
+        Modifier.fillMaxWidth().padding(bottom = 14.dp).drueckFeder(quelle)
+            .shadow(2.dp, RoundedCornerShape(26.dp)).clip(RoundedCornerShape(26.dp)).background(Color.White)
+            .clickable(quelle, androidx.compose.material3.ripple(), onClick = onClick)
+            .padding(horizontal = 22.dp, vertical = 18.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(Modifier.size(64.dp).clip(CircleShape).background(farbe.copy(alpha = 0.16f)), contentAlignment = Alignment.Center) {
+            Text(symbol, fontSize = 30.sp)
+        }
+        Column(Modifier.weight(1f).padding(horizontal = 20.dp)) {
+            Text(titel, color = Dunkel, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+            Text(text, color = if (hinweis) AkzentBlau else TextFarbeSchwach, fontSize = 18.sp, maxLines = 2)
+        }
+        Text("›", color = TextFarbeSchwach, fontSize = 40.sp)
     }
 }
 

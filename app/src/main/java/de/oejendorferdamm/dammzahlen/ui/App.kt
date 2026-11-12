@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -62,6 +63,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.debounce
+import de.oejendorferdamm.dammzahlen.ui.m3.M3Bereich
+import de.oejendorferdamm.dammzahlen.ui.m3.M3Feld
+import de.oejendorferdamm.dammzahlen.ui.m3.M3Gruppe
+import de.oejendorferdamm.dammzahlen.ui.m3.M3Hinweis
+import de.oejendorferdamm.dammzahlen.ui.m3.M3Knopf
+import de.oejendorferdamm.dammzahlen.ui.m3.M3Kopf
+import de.oejendorferdamm.dammzahlen.ui.m3.M3Schalter
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -570,88 +578,111 @@ private fun EinstellungenFenster(
     var seite by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
     androidx.activity.compose.BackHandler(enabled = seite != null) { seite = null }
     val titel = when (seite) { "tafel" -> "Tafel"; "kinder" -> "Kindermodus"; "update" -> "Updates"; "ueber" -> "Über DammZahlen"; else -> "Einstellungen" }
-    Fenster(titel, onSchliessen, breite = 1000, onZurueck = if (seite != null) ({ seite = null }) else null) {
+    de.oejendorferdamm.dammzahlen.ui.m3.EinstellungenThema {
+    val fs = androidx.compose.material3.MaterialTheme.colorScheme
+    Box(
+        Modifier.fillMaxSize().background(Color(0x99000000)).clickable(remember { MutableInteractionSource() }, null, onClick = onSchliessen),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            Modifier.widthIn(max = 1000.dp).fillMaxWidth(0.9f).heightIn(max = 980.dp).shadow(16.dp, RoundedCornerShape(28.dp)).clip(RoundedCornerShape(28.dp))
+                .background(fs.surfaceContainer).clickable(remember { MutableInteractionSource() }, null) {}
+        ) {
+        M3Kopf(titel, if (seite != null) ({ seite = null }) else null, onSchliessen)
         androidx.compose.runtime.key(seite) {
-        Column(Modifier.verticalScroll(rememberScrollState())) {
+        Column(Modifier.verticalScroll(rememberScrollState()).padding(start = 20.dp, end = 20.dp, bottom = 20.dp)) {
           when (seite) {
             null -> {
-                BereichZeile("🎨", Color(0xFF7C3AED), "Tafel", "Hintergrund · Rechnung unter Feldern ${if (zustand.terme) "an" else "aus"} · Seite löschen") { seite = "tafel" }
-                BereichZeile("🧒", Color(0xFF16A34A), "Kindermodus", if (hatPin) "mit PIN geschützt" else "ohne PIN") { seite = "kinder" }
-                BereichZeile("⬆️", Color(0xFF2563EB), "Updates",
-                    updateInfo?.let { "Neue Version ${it.version} verfügbar" } ?: "Installiert: ${BuildConfig.VERSION_NAME} · automatisch ${if (autoUpdate) "an" else "aus"}",
-                    hinweis = updateInfo != null) { seite = "update" }
-                BereichZeile("ℹ️", Color(0xFF6B7280), "Über DammZahlen", "Version ${BuildConfig.VERSION_NAME} · Schrift · Datenschutz") { seite = "ueber" }
+                // Reihenfolge wie in allen Damm-Apps: erst die eigenen Bereiche, unter „Allgemein“ Updates und Über
+                M3Gruppe {
+                    M3Bereich("🎨", Color(0xFF7C3AED), "Tafel", "Hintergrund · Rechnung unter Feldern ${if (zustand.terme) "an" else "aus"} · Seite löschen") { seite = "tafel" }
+                    M3Bereich("🧒", Color(0xFF16A34A), "Kindermodus", if (hatPin) "mit PIN geschützt" else "ohne PIN") { seite = "kinder" }
+                }
+                M3Gruppe("Allgemein") {
+                    M3Bereich("⬆️", Color(0xFF2563EB), "Updates",
+                        updateInfo?.let { "Neue Version ${it.version} verfügbar" } ?: "Installiert: ${BuildConfig.VERSION_NAME} · automatisch prüfen ${if (autoUpdate) "an" else "aus"}",
+                        hinweis = updateInfo != null) { seite = "update" }
+                    M3Bereich("ℹ️", Color(0xFF6B7280), "Über DammZahlen", "Version ${BuildConfig.VERSION_NAME} · Schrift · Datenschutz") { seite = "ueber" }
+                }
             }
             "tafel" -> {
-            Text("Hintergrund", color = TextFarbeSchwach, fontSize = 20.sp)
-            Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                Einstellungen.HINTERGRUENDE.forEach { f ->
-                    Box(Modifier.size(64.dp).clip(CircleShape).background(Color(f))
-                        .border(if (f == hintergrund) 5.dp else 2.dp, if (f == hintergrund) Dunkel else Color(0xFF9E9E9E), CircleShape)
-                        .clickable { onHintergrund(f) })
-                }
-            }
-            Spacer(Modifier.height(10.dp))
-            Zeile("Rechnung unter Feldern und Bus zeigen (z. B. „8 + 5 = 13“)", zustand.terme) { zustand.terme = it; einstellungen.terme = it }
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                TextKnopf("Diese Seite löschen") { zustand.seiteLoeschen() }
-            }
-            }
-            "kinder" -> {
-            Text("Im Kindermodus können Kinder Plättchen und Figuren schieben und wenden – sonst nichts. „Zurücksetzen“ stellt die Aufgabe wieder her. " +
-                if (hatPin) "Zum Beenden ist eine PIN nötig." else "Ohne PIN kann jede/r den Kindermodus beenden.", color = TextFarbeSchwach, fontSize = 18.sp)
-            Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                TextKnopf(if (hatPin) "PIN ändern …" else "PIN festlegen …") { pinSetzen = true }
-                if (hatPin) TextKnopf("PIN entfernen") { einstellungen.setzePin(null); hatPin = false }
-            }
-            }
-            "update" -> {
-            Zeile("Beim Start nach Updates suchen", autoUpdate) { autoUpdate = it; einstellungen.autoUpdate = it }
-            Text("Installiert: ${BuildConfig.VERSION_NAME}" + (updateInfo?.let { " · Neu: ${it.version}" } ?: "") + (if (updateText.isNotEmpty()) " · $updateText" else ""),
-                color = TextFarbeSchwach, fontSize = 18.sp)
-            Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                TextKnopf("Damm-Apps in F-Droid") { oeffneFDroidRepo(context) }
-                TextKnopf("Jetzt suchen") {
-                    updateText = "Sucht …"
-                    scope.launch {
-                        val i = Update.pruefen()
-                        val neu = i?.takeIf { Update.istNeuer(it.version, BuildConfig.VERSION_NAME) }
-                        onUpdateGefunden(neu)
-                        updateText = when { i == null -> "GitHub nicht erreichbar"; neu == null -> "Auf dem neuesten Stand"; else -> "Neue Version ${neu.version}" }
-                    }
-                }
-                updateInfo?.let { info ->
-                    TextKnopf(if (fortschritt >= 0f) "Lädt … ${(fortschritt * 100).toInt()} %" else "Version ${info.version} installieren", hervorgehoben = true) {
-                        if (!Update.darfInstallieren(context)) { Update.erlaubnisOeffnen(context); updateText = "Bitte „Apps installieren“ erlauben, dann noch einmal tippen"; return@TextKnopf }
-                        if (fortschritt >= 0f) return@TextKnopf
-                        fortschritt = 0f
-                        scope.launch {
-                            try {
-                                val apk = Update.laden(context, info) { p -> fortschritt = p }
-                                Update.installieren(context, apk)
-                            } catch (e: Exception) {
-                                updateText = e.message ?: "Fehler"
+                M3Gruppe("Hintergrund") {
+                    M3Feld {
+                        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                            Einstellungen.HINTERGRUENDE.forEach { f ->
+                                Box(Modifier.size(64.dp).clip(CircleShape).background(Color(f))
+                                    .border(if (f == hintergrund) 5.dp else 1.dp, if (f == hintergrund) fs.primary else fs.outlineVariant, CircleShape)
+                                    .clickable { onHintergrund(f) })
                             }
-                            fortschritt = -1f
                         }
                     }
                 }
+                M3Gruppe("Anzeige") {
+                    M3Feld { M3Schalter("Rechnung unter Feldern und Bus zeigen", zustand.terme, "z. B. „8 + 5 = 13“") { zustand.terme = it; einstellungen.terme = it } }
+                    M3Feld { M3Knopf("Diese Seite löschen") { zustand.seiteLoeschen() } }
+                }
             }
+            "kinder" -> M3Gruppe {
+                M3Feld {
+                    M3Hinweis("Im Kindermodus können Kinder Plättchen und Figuren schieben und wenden – sonst nichts. „Zurücksetzen“ stellt die Aufgabe wieder her. " +
+                        if (hatPin) "Zum Beenden ist eine PIN nötig." else "Ohne PIN kann jede/r den Kindermodus beenden.")
+                    Spacer(Modifier.height(14.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        M3Knopf(if (hatPin) "PIN ändern …" else "PIN festlegen …", betont = true) { pinSetzen = true }
+                        if (hatPin) M3Knopf("PIN entfernen") { einstellungen.setzePin(null); hatPin = false }
+                    }
+                }
             }
-            else -> {
-            Text(
-                "Mathe-Legetafel für Klasse 1 und 2 (Bildungsplan Hamburg). Freie Software unter der GNU GPL v3, Quelltext: github.com/Teyro/DammZahlen.\n" +
-                    "Schrift: Grundschrift von Christian Urff (www.urff.info), Lizenz CC BY 3.0.\n" +
-                    "Es werden keine Namen oder Lernstände gespeichert – nur die Tafel selbst, auf diesem Gerät.",
-                color = TextFarbeSchwach, fontSize = 18.sp
-            )
+            "update" -> M3Gruppe {
+                M3Feld {
+                    M3Hinweis("Installiert: ${BuildConfig.VERSION_NAME}" + (updateInfo?.let { " · Neu: ${it.version}" } ?: "") + (if (updateText.isNotEmpty()) " · $updateText" else ""))
+                    M3Schalter("Automatisch nach dem Start prüfen", autoUpdate) { autoUpdate = it; einstellungen.autoUpdate = it }
+                }
+                M3Feld {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        updateInfo?.let { info ->
+                            M3Knopf(if (fortschritt >= 0f) "Lädt … ${(fortschritt * 100).toInt()} %" else "Version ${info.version} installieren", betont = true) {
+                                if (!Update.darfInstallieren(context)) { Update.erlaubnisOeffnen(context); updateText = "Bitte „Apps installieren“ erlauben, dann noch einmal tippen"; return@M3Knopf }
+                                if (fortschritt >= 0f) return@M3Knopf
+                                fortschritt = 0f
+                                scope.launch {
+                                    try {
+                                        val apk = Update.laden(context, info) { p -> fortschritt = p }
+                                        Update.installieren(context, apk)
+                                    } catch (e: Exception) {
+                                        updateText = e.message ?: "Fehler"
+                                    }
+                                    fortschritt = -1f
+                                }
+                            }
+                        }
+                        M3Knopf("Jetzt nach Updates suchen", betont = updateInfo == null) {
+                            updateText = "Sucht …"
+                            scope.launch {
+                                val i = Update.pruefen()
+                                val neu = i?.takeIf { Update.istNeuer(it.version, BuildConfig.VERSION_NAME) }
+                                onUpdateGefunden(neu)
+                                updateText = when { i == null -> "GitHub nicht erreichbar"; neu == null -> "Auf dem neuesten Stand"; else -> "Neue Version ${neu.version}" }
+                            }
+                        }
+                        M3Knopf("Damm-Apps in F-Droid hinzufügen") { oeffneFDroidRepo(context) }
+                    }
+                }
+            }
+            else -> M3Gruppe {
+                M3Feld {
+                    M3Hinweis(
+                        "Mathe-Legetafel für Klasse 1 und 2 (Bildungsplan Hamburg). Freie Software unter der GNU GPL v3, Quelltext: github.com/Teyro/DammZahlen.\n" +
+                            "Schrift: Grundschrift von Christian Urff (www.urff.info), Lizenz CC BY 3.0.\n" +
+                            "Es werden keine Namen oder Lernstände gespeichert – nur die Tafel selbst, auf diesem Gerät."
+                    )
+                }
             }
           }
         }
         }
+        }
+    }
     }
     if (pinSetzen) {
         var erste by remember { mutableStateOf<String?>(null) }
@@ -663,36 +694,6 @@ private fun EinstellungenFenster(
                 else -> { erste = null; false }
             }
         }
-    }
-}
-
-@Composable
-private fun Zeile(text: String, an: Boolean, onAendern: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth().clickable { onAendern(!an) }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(text, color = TextFarbe, fontSize = 20.sp, modifier = Modifier.weight(1f))
-        Switch(checked = an, onCheckedChange = onAendern, colors = androidx.compose.material3.SwitchDefaults.colors(checkedTrackColor = AkzentBlau, checkedThumbColor = Color.White))
-    }
-}
-
-/** Zeile der Übersicht (wie in DammZeit): Symbol im Farbkreis, Titel, Kurzfassung, Pfeil. */
-@Composable
-private fun BereichZeile(symbol: String, farbe: Color, titel: String, text: String, hinweis: Boolean = false, onClick: () -> Unit) {
-    val quelle = remember { MutableInteractionSource() }
-    Row(
-        Modifier.fillMaxWidth().padding(bottom = 14.dp).drueckFeder(quelle)
-            .shadow(2.dp, RoundedCornerShape(26.dp)).clip(RoundedCornerShape(26.dp)).background(Color.White)
-            .clickable(quelle, androidx.compose.material3.ripple(), onClick = onClick)
-            .padding(horizontal = 22.dp, vertical = 18.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(Modifier.size(64.dp).clip(CircleShape).background(farbe.copy(alpha = 0.16f)), contentAlignment = Alignment.Center) {
-            Text(symbol, fontSize = 30.sp)
-        }
-        Column(Modifier.weight(1f).padding(horizontal = 20.dp)) {
-            Text(titel, color = Dunkel, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-            Text(text, color = if (hinweis) AkzentBlau else TextFarbeSchwach, fontSize = 18.sp, maxLines = 2)
-        }
-        Text("›", color = TextFarbeSchwach, fontSize = 40.sp)
     }
 }
 

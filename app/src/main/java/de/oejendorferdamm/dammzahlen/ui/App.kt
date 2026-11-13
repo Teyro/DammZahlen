@@ -120,10 +120,17 @@ fun DammZahlenApp(einstellungen: Einstellungen) {
         }
     }
     // Updates: kurz nach dem Start prüfen (roter Punkt am Menü)
+    // Automatisch nur in ruhigen Zeiten (Pausen, vor/nach dem Unterricht) – höchstens alle 6 Stunden
     LaunchedEffect(Unit) {
-        if (einstellungen.autoUpdate) {
-            delay(6000)
-            Update.pruefen()?.takeIf { Update.istNeuer(it.version, BuildConfig.VERSION_NAME) }?.let { updateInfo = it }
+        if (!einstellungen.autoUpdate) return@LaunchedEffect
+        delay(6000)
+        var zuletzt = 0L
+        while (true) {
+            if (de.oejendorferdamm.dammzahlen.update.UpdateZeit.erlaubt() && System.currentTimeMillis() - zuletzt > 6 * 60 * 60_000L) {
+                Update.pruefen()?.takeIf { Update.istNeuer(it.version, BuildConfig.VERSION_NAME) }?.let { updateInfo = it }
+                zuletzt = System.currentTimeMillis()
+            }
+            delay(60_000)
         }
     }
 

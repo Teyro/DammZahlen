@@ -31,16 +31,7 @@ object Update {
 
     data class Info(val version: String, val url: String, val groesse: Long, val notizen: String)
 
-    fun istNeuer(neu: String, alt: String): Boolean {
-        val a = neu.removePrefix("v").split('.').map { it.toIntOrNull() ?: 0 }
-        val b = alt.removePrefix("v").split('.').map { it.substringBefore('-').toIntOrNull() ?: 0 }
-        for (i in 0 until maxOf(a.size, b.size)) {
-            val x = a.getOrElse(i) { 0 }
-            val y = b.getOrElse(i) { 0 }
-            if (x != y) return x > y
-        }
-        return false
-    }
+    fun istNeuer(neu: String, alt: String): Boolean = de.oejendorferdamm.core.update.Versionen.istNeuer(neu, alt)
 
     suspend fun pruefen(): Info? = withContext(Dispatchers.IO) {
         try {

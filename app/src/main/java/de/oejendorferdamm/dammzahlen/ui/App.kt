@@ -63,13 +63,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.debounce
-import de.oejendorferdamm.dammzahlen.ui.m3.M3Bereich
-import de.oejendorferdamm.dammzahlen.ui.m3.M3Feld
-import de.oejendorferdamm.dammzahlen.ui.m3.M3Gruppe
-import de.oejendorferdamm.dammzahlen.ui.m3.M3Hinweis
-import de.oejendorferdamm.dammzahlen.ui.m3.M3Knopf
-import de.oejendorferdamm.dammzahlen.ui.m3.M3Kopf
-import de.oejendorferdamm.dammzahlen.ui.m3.M3Schalter
+import de.oejendorferdamm.core.m3.M3Bereich
+import de.oejendorferdamm.core.m3.M3Feld
+import de.oejendorferdamm.core.m3.M3Gruppe
+import de.oejendorferdamm.core.m3.M3Hinweis
+import de.oejendorferdamm.core.m3.M3Knopf
+import de.oejendorferdamm.core.m3.M3Kopf
+import de.oejendorferdamm.core.m3.M3Schalter
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -585,7 +585,7 @@ private fun EinstellungenFenster(
     var seite by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
     androidx.activity.compose.BackHandler(enabled = seite != null) { seite = null }
     val titel = when (seite) { "tafel" -> "Tafel"; "kinder" -> "Kindermodus"; "update" -> "Updates"; "ueber" -> "Über DammZahlen"; else -> "Einstellungen" }
-    de.oejendorferdamm.dammzahlen.ui.m3.EinstellungenThema {
+    de.oejendorferdamm.core.m3.EinstellungenThema {
     val fs = androidx.compose.material3.MaterialTheme.colorScheme
     Box(
         Modifier.fillMaxSize().background(Color(0x99000000)).clickable(remember { MutableInteractionSource() }, null, onClick = onSchliessen),
